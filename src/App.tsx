@@ -142,11 +142,9 @@ export const App: React.FC = () => {
     syncWithBackend();
   }, []);
 
-  // Default view: first alert (frame, mass, route), toast announcing the alerts
+  // Toast announcing the alerts; nothing is selected until the user picks one
   useEffect(() => {
-    if (alerts.length === 0 || selectedAlertId) return;
-    handleSelectAlert(alerts[0].id);
-    setReadIds([]);
+    if (alerts.length === 0) return;
     setActiveToast(toNotification(alerts[0], false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [alertsData]);
@@ -435,7 +433,7 @@ export const App: React.FC = () => {
         />
 
         <BottomTelemetryBar weather={weather} />
-        <MapLegend manifest={manifest} />
+        <MapLegend manifest={manifest} alertSelected={!!selectedAlert} />
 
         {activeTab === 'planificacion' && (
           <PlanningModule

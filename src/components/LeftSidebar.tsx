@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import {
   Anchor,
   NavigationArrow,
   CaretLeft,
   CaretRight,
+  CaretDown,
   CheckCircle,
   Stack,
   Compass,
@@ -50,6 +51,11 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
   minutes,
   onChangeMinutes,
 }) => {
+  const [routeOpen, setRouteOpen] = useState(false);
+  useEffect(() => {
+    if (selectedAlertId) setRouteOpen(true);
+  }, [selectedAlertId]);
+
   return (
     <>
       {/* Toggle Tab Button when closed (Separado 32px hacia abajo del Header) */}
@@ -108,6 +114,11 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                 <span className="text-[10px] font-bold text-teal-300 uppercase tracking-wider block font-mono">
                   1. Alertas de Recolección ({alerts.length})
                 </span>
+                {alerts.length > 0 && !selectedAlertId && (
+                  <div className="text-[11px] text-amber-200 bg-amber-500/15 p-2 rounded-xl border border-amber-400/30">
+                    Selecciona una alerta para ver la masa y su ruta
+                  </div>
+                )}
                 {alerts.length === 0 && (
                   <div className="text-[11px] text-slate-400 bg-black/20 p-2 rounded-xl border border-white/5">
                     Sin alertas disponibles.
@@ -140,14 +151,24 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
 
               {/* SECTION: 2. RUTA PRE-GENERADA */}
               <div className="space-y-2 bg-black/35 p-3 rounded-2xl border border-teal-400/20">
-                <span className="text-[10.5px] font-bold text-teal-300 uppercase tracking-wider font-mono flex items-center gap-1.5">
-                  <NavigationArrow size={13} weight="duotone" className="text-[#2DD4BF]" />
-                  2. Ruta desde puerto
-                </span>
+                <button
+                  type="button"
+                  aria-expanded={routeOpen}
+                  aria-controls="ruta-desde-puerto"
+                  onClick={() => setRouteOpen((o) => !o)}
+                  className="w-full flex items-center justify-between cursor-pointer text-[10.5px] font-bold text-teal-300 uppercase tracking-wider font-mono"
+                >
+                  <span className="flex items-center gap-1.5">
+                    <NavigationArrow size={13} weight="duotone" className="text-[#2DD4BF]" />
+                    2. Ruta desde puerto
+                  </span>
+                  <CaretDown size={14} weight="bold" className={`transition-transform ${routeOpen ? 'rotate-180' : ''}`} />
+                </button>
 
+                <div id="ruta-desde-puerto" hidden={!routeOpen}>
                 {!detail ? (
                   <div className="text-[11px] text-slate-400">
-                    {selectedAlertId ? 'Cargando rutas…' : 'Selecciona una alerta para ver su ruta.'}
+                    {selectedAlertId ? 'Cargando rutas…' : 'Selecciona una alerta para ver la masa y su ruta'}
                   </div>
                 ) : (
                   <div className="space-y-1.5">
@@ -190,6 +211,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                       })}
                   </div>
                 )}
+                </div>
               </div>
 
               {/* SECTION: 3. CAPAS DE INFORMACIÓN */}

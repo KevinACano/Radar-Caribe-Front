@@ -59,7 +59,7 @@ export const Navbar: React.FC<NavbarProps> = ({
           <img 
             src="/Radar Caribe.png" 
             alt="Radar Caribe" 
-            className="h-10 md:h-11 w-auto object-contain filter drop-shadow-[0_2px_10px_rgba(45,212,191,0.3)] transition-transform duration-300"
+            className="h-11 md:h-12 w-auto object-contain rounded-xl bg-white/90 p-1 ring-2 ring-teal-300/70 shadow-[0_0_14px_rgba(45,212,191,0.45)] transition-transform duration-300"
           />
 
           <div className="border-l border-teal-400/25 pl-3 flex flex-col justify-center">
