@@ -1,6 +1,7 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import { MapContainer, TileLayer, Polyline, Marker, Popup, Tooltip, GeoJSON, useMap } from 'react-leaflet';
 import L from 'leaflet';
+import { booleanIntersects } from '@turf/turf';
 import { motion } from 'motion/react';
 import { BasePort, DashboardLayers, FrameCollection, SargassumManifest } from '../types';
 import { densityColor } from '../utils/density';
@@ -19,6 +20,7 @@ interface MapBoardProps {
   manifest: SargassumManifest | null;
   highlightGeometry: GeoJSON.Polygon | GeoJSON.MultiPolygon | null;
   highlightId: string | null;
+  focusAreaGeometry: GeoJSON.Polygon | null;
   focusBounds: Bounds | null;
   isSimulating: boolean;
   vesselPosition: [number, number] | null;
@@ -55,6 +57,7 @@ export const MapBoard: React.FC<MapBoardProps> = ({
   manifest,
   highlightGeometry,
   highlightId,
+  focusAreaGeometry,
   focusBounds,
   isSimulating,
   vesselPosition,
@@ -63,6 +66,14 @@ export const MapBoard: React.FC<MapBoardProps> = ({
 }) => {
   const mapCenter: [number, number] = [20.9, -86.7];
   const mapRef = useRef<L.Map | null>(null);
+
+  // Cells touching the alert's area (memoized per frame + area)
+  const insideCells = useMemo(() => {
+    if (!frame || !focusAreaGeometry) return null;
+    const set = new Set<GeoJSON.Feature>();
+    for (const f of frame.features) if (booleanIntersects(f, focusAreaGeometry)) set.add(f);
+    return set;
+  }, [frame, focusAreaGeometry]);
 
   const handleFocusSargassum = () => {
     if (!mapRef.current) return;
@@ -208,13 +219,14 @@ export const MapBoard: React.FC<MapBoardProps> = ({
         {/* PREDICCIÓN: celdas de densidad del frame seleccionado (escala log del manifest) */}
         {layers.sargassumPrediction && frame && manifest && (
           <GeoJSON
-            key={`frame-${manifest.run_id}-${frame.features.length}-${frame.features[0]?.properties.density}`}
+            key={`frame-${manifest.run_id}-${frame.features.length}-${frame.features[0]?.properties.density}-${insideCells ? 'dim' : 'all'}`}
             data={frame}
             interactive={false}
             style={(f) => ({
               fillColor: densityColor(f?.properties?.density ?? 0, manifest.vmin, manifest.vmax, manifest.palette),
-              fillOpacity: 0.6,
-              stroke: false,
+              ...(insideCells && f && !insideCells.has(f)
+                ? { fillOpacity: 0.17, stroke: true, weight: 0.5, color: '#FFFFFF', opacity: 0.06 }
+                : { fillOpacity: 0.6, stroke: false }),
             })}
           />
         )}

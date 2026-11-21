@@ -28,6 +28,7 @@ import {
   fetchAlerts,
   fetchBackendPorts,
   fetchBackendWeather,
+  fetchCollectionAreas,
   fetchFrame,
   fetchManifest,
 } from './services/api';
@@ -41,6 +42,7 @@ export const App: React.FC = () => {
   const [backendConnected, setBackendConnected] = useState<boolean>(true);
   const [alertsData, setAlertsData] = useState<AlertsResponse | null>(null);
   const [manifest, setManifest] = useState<SargassumManifest | null>(null);
+  const [areas, setAreas] = useState<Record<string, GeoJSON.Polygon>>({});
   const [frame, setFrame] = useState<FrameCollection | null>(null);
   const [details, setDetails] = useState<Record<string, AlertDetail>>({});
   const detailRequests = useRef<Set<string>>(new Set());
@@ -148,6 +150,14 @@ export const App: React.FC = () => {
     setActiveToast(toNotification(alerts[0], false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [alertsData]);
+
+  // Collection area polygons: used for dimming logic only, never drawn
+  useEffect(() => {
+    if (!runId) return;
+    fetchCollectionAreas(runId)
+      .then((fc) => setAreas(Object.fromEntries(fc.features.map((f) => [f.properties.id, f.geometry]))))
+      .catch(() => setAreas({}));
+  }, [runId]);
 
   // Frame for the time control
   useEffect(() => {
@@ -399,6 +409,7 @@ export const App: React.FC = () => {
           manifest={manifest}
           highlightGeometry={selectedAlert && selectedAlert.frame_minutes === minutes ? selectedAlert.mass.geometry : null}
           highlightId={selectedAlertId}
+          focusAreaGeometry={selectedAlert ? areas[selectedAlert.area_id] ?? null : null}
           focusBounds={focusBounds}
           isSimulating={isSimulating}
           vesselPosition={vesselPosition}

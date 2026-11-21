@@ -71,3 +71,8 @@ export const fetchManifest = (runId: string) =>
 
 export const fetchFrame = (runId: string, minutes: number) =>
   getJson<FrameCollection>(`${API_BASE}/sargassum/runs/${encodeURIComponent(runId)}/frames/${minutes}`);
+
+export const fetchCollectionAreas = (runId: string) =>
+  getJson<GeoJSON.FeatureCollection<GeoJSON.Polygon, { id: string }>>(
+    `${API_BASE}/sargassum/collection-areas?run_id=${encodeURIComponent(runId)}`
+  );
