@@ -9,9 +9,14 @@ import {
   CaretRight, 
   CheckCircle, 
   Stack, 
-  Sparkle 
+  Compass,
+  ArrowsClockwise,
+  MapPinPlus,
+  Flame,
+  Plant,
+  Path
 } from '@phosphor-icons/react';
-import { BasePort, CustomWaypoint, DashboardLayers, SargassumDetection } from '../types';
+import { BasePort, CustomWaypoint, DashboardLayers, SargassumDetection, SargassumCluster } from '../types';
 
 interface LeftSidebarProps {
   ports: BasePort[];
@@ -24,7 +29,7 @@ interface LeftSidebarProps {
   onRemoveCustomWaypoint: (id: string) => void;
   onSelectAll: () => void;
   onClearAll: () => void;
-  onResetDefaults: () => void;
+  onResetDefaults?: () => void;
   layers: DashboardLayers;
   onToggleLayer: (layerKey: keyof DashboardLayers) => void;
   isOpen: boolean;
@@ -43,6 +48,13 @@ interface LeftSidebarProps {
   backendError?: string | null;
   onMoveWaypointUp?: (index: number) => void;
   onMoveWaypointDown?: (index: number) => void;
+  // Manual Waypoint Mode
+  isAddPointActive: boolean;
+  onToggleAddPointActive: () => void;
+  // Sargassum Clusters
+  sargassumClusters: SargassumCluster[];
+  selectedClusterIds: string[];
+  onToggleCluster: (clusterId: string) => void;
 }
 
 export const LeftSidebar: React.FC<LeftSidebarProps> = ({
@@ -72,17 +84,27 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
   backendError,
   onMoveWaypointUp,
   onMoveWaypointDown,
+  isAddPointActive,
+  onToggleAddPointActive,
+  sargassumClusters,
+  selectedClusterIds,
+  onToggleCluster,
 }) => {
   const selectedPort = ports.find((p) => p.id === selectedPortId) || ports[0];
   const selectedDetectionsList = selectedDetectionIds
     .map((id) => detections.find((d) => d.id === id))
     .filter((d): d is SargassumDetection => Boolean(d));
 
-  const totalPointsCount = 1 + selectedDetectionsList.length + customWaypoints.length + (returnToBase ? 1 : 0);
+  const totalPointsCount = 
+    1 + 
+    selectedDetectionsList.length + 
+    customWaypoints.length + 
+    selectedClusterIds.length + 
+    (returnToBase ? 1 : 0);
 
   return (
     <>
-      {/* Toggle Tab Button when closed (Separado 24px+ hacia abajo del Header) */}
+      {/* Toggle Tab Button when closed (Separado 32px hacia abajo del Header) */}
       {!isOpen && (
         <motion.button
           initial={{ opacity: 0, x: -20 }}
@@ -90,7 +112,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           onClick={onToggleOpen}
-          className="absolute top-[92px] left-4 z-40 bg-[#06292D]/85 backdrop-blur-md text-[#CCFBF1] p-2.5 rounded-2xl border border-teal-400/20 shadow-floating transition-all flex items-center space-x-2 text-xs font-bold pointer-events-auto cursor-pointer"
+          className="absolute top-[116px] left-4 z-40 bg-[#06292D]/85 backdrop-blur-md text-[#CCFBF1] p-2.5 rounded-2xl border border-teal-400/20 shadow-floating transition-all flex items-center space-x-2 text-xs font-bold pointer-events-auto cursor-pointer"
           title="Abrir Centro de Control"
         >
           <Stack size={18} weight="duotone" className="text-[#2DD4BF]" />
@@ -99,7 +121,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
         </motion.button>
       )}
 
-      {/* Main Floating Card (Verde Abisal Translúcido) */}
+      {/* Main Floating Card (Verde Abisal Translúcido con separación del header) */}
       <AnimatePresence>
         {isOpen && (
           <motion.aside
@@ -107,13 +129,13 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
             animate={{ opacity: 1, x: 0, scale: 1 }}
             exit={{ opacity: 0, x: -40, scale: 0.96 }}
             transition={{ type: 'spring', stiffness: 350, damping: 28 }}
-            className="absolute top-[92px] left-4 bottom-20 z-40 w-80 md:w-[350px] bg-[#06292D]/85 backdrop-blur-md border border-teal-400/20 shadow-floating rounded-[22px] flex flex-col overflow-hidden select-none pointer-events-auto font-sans"
+            className="absolute top-[116px] left-4 bottom-20 z-40 w-80 md:w-[350px] bg-[#06292D]/85 backdrop-blur-md border border-teal-400/20 shadow-floating rounded-[22px] flex flex-col overflow-hidden select-none pointer-events-auto font-sans"
           >
-            {/* Header */}
+            {/* Header con icono náutico sobrio Compass */}
             <div className="p-4 border-b border-teal-400/20 flex items-center justify-between">
               <div>
                 <h2 className="text-sm font-montserrat font-extrabold text-white tracking-tight flex items-center gap-2">
-                  <Sparkle size={18} weight="duotone" className="text-[#2DD4BF]" />
+                  <Compass size={18} weight="duotone" className="text-[#2DD4BF]" />
                   Control de Recolección
                 </h2>
                 <p className="text-[10.5px] text-teal-200/80 font-medium">
@@ -172,10 +194,11 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                   </div>
                 </div>
 
-                {/* Return to Base Toggle */}
+                {/* Return to Base Toggle con icono Phosphor ArrowsClockwise */}
                 <div className="flex items-center justify-between pt-1">
-                  <span className="text-[11px] text-slate-200 font-medium">
-                    🔁 Circuito cerrado (retorno a base)
+                  <span className="text-[11px] text-slate-200 font-medium flex items-center gap-1.5">
+                    <ArrowsClockwise size={14} weight="bold" className="text-teal-300" />
+                    <span>Circuito cerrado (retorno a base)</span>
                   </span>
                   <button
                     type="button"
@@ -241,7 +264,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-bold text-teal-300 uppercase tracking-wider font-mono">
-                    2. Puntos de Recolección ({selectedDetectionIds.length + customWaypoints.length})
+                    2. Puntos de Recolección ({selectedDetectionIds.length + customWaypoints.length + selectedClusterIds.length})
                   </span>
                   <div className="flex items-center space-x-1.5 text-[10px]">
                     <motion.button
@@ -262,13 +285,56 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                   </div>
                 </div>
 
+                {/* FILAMENTO/MANCHA CONSOLIDADA DEL GEOJSON (1 SOLO PUNTO POR MANCHA) */}
+                {sargassumClusters.length > 0 && (
+                  <div className="space-y-1.5">
+                    {sargassumClusters.map((cluster) => {
+                      const isSelected = selectedClusterIds.includes(cluster.id);
+                      return (
+                        <motion.div
+                          key={cluster.id}
+                          whileHover={{ scale: 1.01 }}
+                          onClick={() => onToggleCluster(cluster.id)}
+                          className={`flex items-center justify-between p-2 rounded-xl border transition-all cursor-pointer ${
+                            isSelected
+                              ? 'bg-teal-500/20 border-teal-400/50 text-white shadow-[0_0_12px_rgba(20,184,166,0.2)]'
+                              : 'bg-black/20 border-white/5 text-slate-300 hover:bg-black/30'
+                          }`}
+                        >
+                          <div className="flex items-center space-x-2 truncate">
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              onChange={() => {}}
+                              className="rounded border-teal-400/50 bg-slate-900 text-teal-400 focus:ring-0 cursor-pointer"
+                            />
+                            <div className="truncate">
+                              <span className="font-montserrat font-semibold text-xs block truncate flex items-center gap-1.5">
+                                <Flame size={13} weight="fill" className="text-orange-400 shrink-0" />
+                                {cluster.name}
+                              </span>
+                              <span className="text-[10px] text-teal-200/70 font-mono block">
+                                ~{cluster.estimatedMassTons.toLocaleString()} t · {cluster.cellCount} celdas (P. máx: {(cluster.maxProb * 100).toFixed(0)}%)
+                              </span>
+                            </div>
+                          </div>
+
+                          <span className="text-[9.5px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider shrink-0 bg-red-500/30 text-red-300 border border-red-500/40">
+                            Alta
+                          </span>
+                        </motion.div>
+                      );
+                    })}
+                  </div>
+                )}
+
                 {/* Custom Waypoints Section (Puntos Marcados en el Mapa) */}
                 {customWaypoints.length > 0 && (
                   <div className="space-y-1.5 bg-sky-950/40 border border-sky-400/30 p-2 rounded-xl">
                     <div className="flex items-center justify-between text-[10px] text-sky-200 font-bold font-mono">
                       <span>Puntos Marcados en el Mapa ({customWaypoints.length})</span>
                     </div>
-                    <div className="space-y-1 max-h-28 overflow-y-auto pr-1">
+                    <div className="space-y-1 max-h-24 overflow-y-auto pr-1">
                       {customWaypoints.map((wp, idx) => (
                         <div
                           key={wp.id}
@@ -309,7 +375,6 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                                 ▼
                               </button>
                             )}
-                            {/* Botón Eliminar Punto Inmediato */}
                             <button
                               type="button"
                               onClick={(e) => {
@@ -329,7 +394,7 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                 )}
 
                 {/* Sargassum Detections Checklist */}
-                <div className="space-y-1.5 max-h-44 overflow-y-auto pr-1">
+                <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1">
                   {detections.map((detection) => {
                     const isChecked = selectedDetectionIds.includes(detection.id);
 
@@ -376,6 +441,26 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                     );
                   })}
                 </div>
+
+                {/* BOTÓN TOGGLE: AGREGAR PUNTO MANUAL EN MAPA (MapPinPlus) */}
+                <div className="pt-2 border-t border-teal-400/15">
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    type="button"
+                    onClick={onToggleAddPointActive}
+                    className={`w-full py-2 px-3 rounded-xl font-montserrat font-bold text-xs flex items-center justify-center space-x-2 transition-all cursor-pointer border ${
+                      isAddPointActive
+                        ? 'bg-amber-500/25 border-amber-400 text-amber-200 shadow-[0_0_15px_rgba(251,191,36,0.35)] animate-pulse'
+                        : 'bg-teal-500/15 border-teal-400/30 text-teal-200 hover:bg-teal-500/25 hover:text-white'
+                    }`}
+                  >
+                    <MapPinPlus size={16} weight="bold" className={isAddPointActive ? 'text-amber-400' : 'text-[#2DD4BF]'} />
+                    <span>
+                      {isAddPointActive ? 'Modo activo: Clic en mapa para marcar' : 'Agregar punto manual en mapa'}
+                    </span>
+                  </motion.button>
+                </div>
               </div>
 
               {/* SECTION: 3. CAPAS DE INFORMACIÓN */}
@@ -394,7 +479,10 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                         : 'bg-black/20 text-slate-400 border-white/5'
                     }`}
                   >
-                    <span>🌿 Bancos</span>
+                    <span className="flex items-center gap-1.5">
+                      <Plant size={15} weight="duotone" className="text-teal-300" />
+                      <span>Bancos / Celdas</span>
+                    </span>
                     {layers.sargassumPrediction && <CheckCircle size={14} weight="bold" className="text-teal-400" />}
                   </button>
 
@@ -407,7 +495,10 @@ export const LeftSidebar: React.FC<LeftSidebarProps> = ({
                         : 'bg-black/20 text-slate-400 border-white/5'
                     }`}
                   >
-                    <span>🧭 Trazado</span>
+                    <span className="flex items-center gap-1.5">
+                      <Path size={15} weight="duotone" className="text-teal-300" />
+                      <span>Trazado</span>
+                    </span>
                     {layers.optimalRoutes && <CheckCircle size={14} weight="bold" className="text-teal-400" />}
                   </button>
                 </div>

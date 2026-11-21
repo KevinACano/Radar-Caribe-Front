@@ -1,10 +1,10 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
+import { motion, AnimatePresence } from 'motion/react';
+import { Bell } from '@phosphor-icons/react';
 import { Navbar } from './components/Navbar';
 import { MapBoard } from './components/MapBoard';
 import { LeftSidebar } from './components/LeftSidebar';
-import { RightMetricsPanel } from './components/RightMetricsPanel';
 import { BottomTelemetryBar } from './components/BottomTelemetryBar';
-import { SimulationHUD } from './components/SimulationHUD';
 import { InfoModal } from './components/InfoModal';
 import { MapLegend } from './components/MapLegend';
 import { PlanningModule } from './components/PlanningModule';
@@ -15,6 +15,8 @@ import {
   DEFAULT_SELECTED_DETECTIONS, 
   SARGASSUM_DETECTIONS as LOCAL_DETECTIONS 
 } from './data/sargassumData';
+import { SAMPLE_GEOJSON } from './data/sampleGeoJson';
+import { clusterSargassumFeatures } from './utils/sargassumClustering';
 import { 
   calculateBearing, 
   computeRouteOptimization, 
@@ -30,7 +32,10 @@ import {
   MissionPlan, 
   OptimizationMetrics, 
   RouteStop, 
-  SargassumDetection 
+  SargassumDetection,
+  SargassumGeoJsonCollection,
+  SargassumCluster,
+  AppNotification
 } from './types';
 import { 
   checkBackendHealth, 
@@ -61,12 +66,27 @@ export const App: React.FC = () => {
   const [detections, setDetections] = useState<SargassumDetection[]>(LOCAL_DETECTIONS);
   const [weather, setWeather] = useState<MaritimeWeather>(LOCAL_WEATHER);
 
-  // Ports and Detections Selection
-  const [selectedPortId, setSelectedPortId] = useState<string>(DEFAULT_PORT_ID);
-  const [selectedDetectionIds, setSelectedDetectionIds] = useState<string[]>(DEFAULT_SELECTED_DETECTIONS);
+  // GeoJSON Sargassum Probability Dataset
+  const [geoJsonData] = useState<SargassumGeoJsonCollection | null>(
+    SAMPLE_GEOJSON as unknown as SargassumGeoJsonCollection
+  );
 
-  // Custom Waypoints (Dropped on map click)
+  // Clusters espaciales consolidados (1 SOLO PUNTO POR MANCHA CONTIGUA)
+  const sargassumClusters: SargassumCluster[] = useMemo(() => {
+    if (!geoJsonData?.features) return [];
+    return clusterSargassumFeatures(geoJsonData.features);
+  }, [geoJsonData]);
+
+  // Inicio limpio: 0 puntos ni manchas seleccionadas al cargar
+  const [selectedClusterIds, setSelectedClusterIds] = useState<string[]>([]);
+
+  // Ports and Detections Selection (0 puntos precargados)
+  const [selectedPortId, setSelectedPortId] = useState<string>(DEFAULT_PORT_ID);
+  const [selectedDetectionIds, setSelectedDetectionIds] = useState<string[]>([]);
+
+  // Custom Waypoints & Point Dropping Mode
   const [customWaypoints, setCustomWaypoints] = useState<CustomWaypoint[]>([]);
+  const [isAddPointActive, setIsAddPointActive] = useState<boolean>(false);
 
   // 100% Ruta Sugerida Optimizada
   const [returnToBase, setReturnToBase] = useState<boolean>(true);
@@ -83,18 +103,31 @@ export const App: React.FC = () => {
     wind: false,
     optimalRoutes: true,
     fuelConsumption: false,
-    basemapMode: 'ocean',
+    basemapMode: 'satellite',
     coordinates: false,
   });
 
   // Time window: Ahora, +6 h, +12 h
   const [timeWindow, setTimeWindow] = useState<'Ahora' | '+6 h' | '+12 h'>('Ahora');
 
-  // UI Panels state
-  const [isLeftOpen, setIsLeftOpen] = useState<boolean>(true);
-  const [isRightOpen, setIsRightOpen] = useState<boolean>(true);
+  // UI Panels state (Panel derecho eliminado para total protagonismo del mapa)
+  const [isLeftOpen, setIsLeftOpen] = useState<boolean>(false);
   const [isInfoModalOpen, setIsInfoModalOpen] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'operativo' | 'planificacion'>('operativo');
+
+  // Sistema de Alertas y Notificaciones (Campana Bell en Header)
+  const [notifications, setNotifications] = useState<AppNotification[]>([
+    {
+      id: 'notif-base-1',
+      title: 'Vigilancia Satelital Activa',
+      message: 'Red de sensores satelitales Copernicus y SIMAR-CONABIO sincronizada.',
+      timestamp: 'Hace 3 min',
+      read: true,
+      type: 'sargassum_alert',
+    },
+  ]);
+  const [activeToast, setActiveToast] = useState<AppNotification | null>(null);
+  const [focusLocation, setFocusLocation] = useState<[number, number] | null>(null);
 
   // Planning & Saved Mission Plans
   const [savedPlans, setSavedPlans] = useState<MissionPlan[]>(() => {
@@ -106,10 +139,8 @@ export const App: React.FC = () => {
     }
   });
 
-  // Simulation State
+  // Simulation State (Bucle automático continuo a 2x)
   const [isSimulating, setIsSimulating] = useState<boolean>(false);
-  const [isPlaying, setIsPlaying] = useState<boolean>(false);
-  const [simulationSpeed, setSimulationSpeed] = useState<number>(2);
   const [currentLegIndex, setCurrentLegIndex] = useState<number>(0);
   const [legProgressFraction, setLegProgressFraction] = useState<number>(0);
   const [vesselPosition, setVesselPosition] = useState<[number, number] | null>(null);
@@ -141,6 +172,52 @@ export const App: React.FC = () => {
     syncWithBackend();
   }, []);
 
+  // Simulación automática de nuevo avistamiento detectado unos segundos después de abrir la app
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      const newAlert: AppNotification = {
+        id: `notif-live-${Date.now()}`,
+        title: 'Nueva Detección de Sargazo',
+        message: 'Nueva detección de sargazo registrada frente a Puerto Morelos (~48 t, prob. 94%).',
+        timestamp: 'Ahora mismo',
+        read: false,
+        type: 'sargassum_alert',
+        locationName: 'Frente a Puerto Morelos',
+        lat: 20.854,
+        lng: -86.821,
+        massTons: 48,
+        probPercent: 94,
+      };
+      setNotifications((prev) => [newAlert, ...prev]);
+      setActiveToast(newAlert);
+    }, 4500);
+
+    return () => clearTimeout(timer);
+  }, []);
+
+  // Cierre automático del toast tras 8 segundos
+  useEffect(() => {
+    if (!activeToast) return;
+    const timer = setTimeout(() => {
+      setActiveToast(null);
+    }, 8000);
+    return () => clearTimeout(timer);
+  }, [activeToast]);
+
+  const handleNotificationClick = (notif: AppNotification) => {
+    if (notif.lat && notif.lng) {
+      setFocusLocation([notif.lat, notif.lng]);
+    }
+    setNotifications((prev) =>
+      prev.map((n) => (n.id === notif.id ? { ...n, read: true } : n))
+    );
+    setActiveToast(null);
+  };
+
+  const handleMarkAllNotificationsRead = () => {
+    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
+  };
+
   // Save plans to localStorage
   const handleSavePlan = (newPlan: MissionPlan) => {
     setSavedPlans((prev) => {
@@ -169,10 +246,11 @@ export const App: React.FC = () => {
   const handleLoadPlanToMap = (plan: MissionPlan) => {
     if (plan.portId) setSelectedPortId(plan.portId);
     if (plan.assignedPointIds && plan.assignedPointIds.length > 0) {
-      setSelectedDetectionIds(plan.assignedPointIds.filter((id) => !id.startsWith('custom-')));
+      setSelectedDetectionIds(
+        plan.assignedPointIds.filter((id) => !id.startsWith('custom-') && !id.startsWith('cluster-'))
+      );
     }
     setBackendRoute(null);
-    handleStopSimulation();
     setActiveTab('operativo');
   };
 
@@ -188,14 +266,16 @@ export const App: React.FC = () => {
       .filter((d): d is SargassumDetection => Boolean(d));
   }, [detections, selectedDetectionIds]);
 
-  // Combined targets (Detections + Custom Waypoints mapped to detection shape)
+  // Combined targets (Detections + Custom Waypoints + 1 Consolidated Point per Sargassum Cluster)
   const allSelectedTargets = useMemo(() => {
     const targets: SargassumDetection[] = [...selectedDetections];
+
+    // Custom waypoints (only those explicitly placed by user)
     customWaypoints.forEach((wp) => {
       targets.push({
         id: wp.id,
         codeName: wp.name,
-        zoneName: 'Coordenada Marítima Manual',
+        zoneName: 'Punto Manual en Mar',
         lat: wp.lat,
         lng: wp.lng,
         detectionDate: 'Punto de Paso',
@@ -208,8 +288,32 @@ export const App: React.FC = () => {
         distanceToCoastKm: 5.0,
       });
     });
+
+    // 1 SOLO PUNTO CONSOLIDADO POR MANCHA CONTIGUA DE SARGAZO
+    sargassumClusters.forEach((cluster) => {
+      if (selectedClusterIds.includes(cluster.id)) {
+        targets.push({
+          id: cluster.id,
+          codeName: cluster.name,
+          zoneName: `Filamento Predictivo (P. máx: ${(cluster.maxProb * 100).toFixed(0)}%)`,
+          lat: cluster.centroidLat,
+          lng: cluster.centroidLng,
+          detectionDate: cluster.datetime,
+          source: 'SIMAR-CONABIO',
+          massTons: cluster.estimatedMassTons,
+          priority: 'Alta',
+          confidencePercent: Math.round(cluster.maxProb * 100),
+          areaKm2: cluster.cellCount * 25.0,
+          estimatedDepthM: 1.5,
+          distanceToCoastKm: Number(
+            computeDistanceKm(cluster.centroidLat, cluster.centroidLng, selectedPort.lat, selectedPort.lng).toFixed(1)
+          ),
+        });
+      }
+    });
+
     return targets;
-  }, [selectedDetections, customWaypoints]);
+  }, [selectedDetections, customWaypoints, sargassumClusters, selectedClusterIds, selectedPort]);
 
   // Base TSP Metrics (Instant fallback / baseline)
   const baseLocalMetrics = useMemo(() => {
@@ -262,34 +366,6 @@ export const App: React.FC = () => {
   // Coordenadas activas para simulación y mapa (100% Sugerida)
   const activeRouteCoordinates: [number, number][] = suggestedRouteCoordinates;
 
-  // Tramos discretos para el HUD de simulación y progreso
-  const simulationStops: RouteStop[] = useMemo(() => {
-    if (metrics?.optimizedSequence && metrics.optimizedSequence.length > 0) {
-      const stops = [...metrics.optimizedSequence];
-      if (returnToBase && stops.length > 1) {
-        const lastStop = stops[stops.length - 1];
-        const retDist = computeDistanceKm(lastStop.lat, lastStop.lng, selectedPort.lat, selectedPort.lng);
-        const cumDist = lastStop.cumulativeDistKm + retDist;
-        stops.push({
-          id: `${selectedPort.id}-ret`,
-          name: selectedPort.name,
-          codeName: selectedPort.shortName || selectedPort.name,
-          lat: selectedPort.lat,
-          lng: selectedPort.lng,
-          isPort: true,
-          massTons: 0,
-          legDistKm: Number(retDist.toFixed(2)),
-          legDistNm: Number((retDist / 1.852).toFixed(2)),
-          cumulativeDistKm: Number(cumDist.toFixed(2)),
-          cumulativeDistNm: Number((cumDist / 1.852).toFixed(2)),
-          legEtaMinutes: Math.round((retDist / 14.816) * 60),
-        });
-      }
-      return stops;
-    }
-    return [];
-  }, [metrics, returnToBase, selectedPort]);
-
   // Request backend route calculation
   const handleCalculateBackendRoute = async () => {
     if (allSelectedTargets.length === 0) return;
@@ -326,8 +402,9 @@ export const App: React.FC = () => {
     }
   };
 
-  // Add Custom Waypoint on Map Click
+  // Add Custom Waypoint on Map Click ONLY if isAddPointActive is true
   const handleAddCustomWaypoint = (lat: number, lng: number) => {
+    if (!isAddPointActive) return;
     const nextIndex = customWaypoints.length + 1;
     const newWp: CustomWaypoint = {
       id: `custom-${Date.now()}`,
@@ -339,9 +416,10 @@ export const App: React.FC = () => {
     };
     setCustomWaypoints((prev) => [...prev, newWp]);
     setBackendRoute(null);
+    setIsAddPointActive(false); // Automatically deactivate after placing the point
   };
 
-  // Remove Custom Waypoint (Immediate update of state, map and route)
+  // Remove Custom Waypoint
   const handleRemoveCustomWaypoint = (id: string) => {
     setCustomWaypoints((prev) => prev.filter((w) => w.id !== id));
     setBackendRoute(null);
@@ -371,7 +449,7 @@ export const App: React.FC = () => {
     setBackendRoute(null);
   };
 
-  // Selection handlers
+  // Selection handlers for coastal detections
   const handleToggleDetection = (id: string) => {
     setSelectedDetectionIds((prev) =>
       prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
@@ -379,188 +457,143 @@ export const App: React.FC = () => {
     setBackendRoute(null);
   };
 
+  // Cluster Selection Handler (Toggle the consolidated cluster point)
+  const handleToggleCluster = (clusterId: string) => {
+    setSelectedClusterIds((prev) =>
+      prev.includes(clusterId) ? prev.filter((id) => id !== clusterId) : [...prev, clusterId]
+    );
+    setBackendRoute(null);
+  };
+
   const handleSelectAll = () => {
     setSelectedDetectionIds(detections.map((d) => d.id));
+    setSelectedClusterIds(sargassumClusters.map((c) => c.id));
     setBackendRoute(null);
   };
 
   const handleClearAll = () => {
     setSelectedDetectionIds([]);
     setCustomWaypoints([]);
+    setSelectedClusterIds([]);
     setBackendRoute(null);
-    handleStopSimulation();
   };
 
   const handleResetDefaults = () => {
     setSelectedPortId(DEFAULT_PORT_ID);
-    setSelectedDetectionIds(DEFAULT_SELECTED_DETECTIONS);
+    setSelectedDetectionIds([]);
     setCustomWaypoints([]);
+    setSelectedClusterIds([]);
     setBackendRoute(null);
-    handleStopSimulation();
-  };
-
-  const handleToggleLayer = (layerKey: keyof DashboardLayers) => {
-    setLayers((prev) => ({
-      ...prev,
-      [layerKey]: !prev[layerKey],
-    }));
   };
 
   const handleCycleBasemapMode = () => {
     setLayers((prev) => {
-      const nextMode =
-        prev.basemapMode === 'satellite'
-          ? 'ocean'
-          : prev.basemapMode === 'ocean'
+      const nextMode: 'ocean' | 'satellite' | 'osm' =
+        prev.basemapMode === 'ocean'
+          ? 'satellite'
+          : prev.basemapMode === 'satellite'
           ? 'osm'
-          : 'satellite';
+          : 'ocean';
       return { ...prev, basemapMode: nextMode };
     });
   };
 
-  // ==========================================
-  // SIMULACIÓN REACTIVA SEGMENTO POR SEGMENTO
-  // ==========================================
-  const handleStartSimulation = () => {
-    if (activeRouteCoordinates.length < 2) return;
-    setCurrentLegIndex(0);
-    setLegProgressFraction(0);
-    setVesselPosition(activeRouteCoordinates[0]);
-    setVesselBearing(
-      calculateBearing(
-        activeRouteCoordinates[0][0],
-        activeRouteCoordinates[0][1],
-        activeRouteCoordinates[1][0],
-        activeRouteCoordinates[1][1]
-      )
-    );
-    setIsSimulating(true);
-    setIsPlaying(true);
+  const handleToggleLayer = (layerKey: keyof DashboardLayers) => {
+    setLayers((prev) => ({ ...prev, [layerKey]: !prev[layerKey] }));
   };
 
-  const handleStopSimulation = () => {
-    setIsSimulating(false);
-    setIsPlaying(false);
-    setCurrentLegIndex(0);
-    setLegProgressFraction(0);
-    setVesselPosition(null);
-  };
-
-  const handleResetSimulation = () => {
-    if (activeRouteCoordinates.length < 2) return;
-    setCurrentLegIndex(0);
-    setLegProgressFraction(0);
-    setVesselPosition(activeRouteCoordinates[0]);
-    setVesselBearing(
-      calculateBearing(
-        activeRouteCoordinates[0][0],
-        activeRouteCoordinates[0][1],
-        activeRouteCoordinates[1][0],
-        activeRouteCoordinates[1][1]
-      )
-    );
-    setIsPlaying(true);
-  };
-
-  // Re-ajustar posición si la ruta cambia durante la simulación
+  // Inicio / reinicio automático de simulación en bucle continuo al existir ruta óptima
   useEffect(() => {
-    if (isSimulating && activeRouteCoordinates.length >= 2) {
-      if (currentLegIndex >= activeRouteCoordinates.length - 1) {
-        setCurrentLegIndex(0);
-        setLegProgressFraction(0);
-        setVesselPosition(activeRouteCoordinates[0]);
+    if (activeRouteCoordinates.length >= 2) {
+      setIsSimulating(true);
+      setCurrentLegIndex(0);
+      setLegProgressFraction(0);
+      setVesselPosition(activeRouteCoordinates[0]);
+      if (activeRouteCoordinates[1]) {
+        const b = calculateBearing(
+          activeRouteCoordinates[0][0],
+          activeRouteCoordinates[0][1],
+          activeRouteCoordinates[1][0],
+          activeRouteCoordinates[1][1]
+        );
+        setVesselBearing(b);
       }
+    } else {
+      setIsSimulating(false);
+      setVesselPosition(null);
     }
-  }, [activeRouteCoordinates, isSimulating]);
+  }, [activeRouteCoordinates]);
 
-  // 60fps Animation Loop siguiendo EXACTAMENTE activeRouteCoordinates
-  const animFrameRef = useRef<number | null>(null);
-  const lastTimeRef = useRef<number | null>(null);
+  // Bucle de animación continuo a 3x (recorrido y retorno en loop infinito)
+  const animationFrameRef = useRef<number | null>(null);
+  const lastTimeRef = useRef<number>(0);
 
   useEffect(() => {
-    if (!isSimulating || !isPlaying || activeRouteCoordinates.length < 2) {
-      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
-      lastTimeRef.current = null;
+    if (!isSimulating || activeRouteCoordinates.length < 2) {
+      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
       return;
     }
 
-    const coords = activeRouteCoordinates;
-    const totalSegments = coords.length - 1;
+    const animate = (time: number) => {
+      if (!lastTimeRef.current) lastTimeRef.current = time;
+      const dt = (time - lastTimeRef.current) / 1000;
+      lastTimeRef.current = time;
 
-    const animate = (timestamp: number) => {
-      if (lastTimeRef.current === null) {
-        lastTimeRef.current = timestamp;
-      }
-      const deltaSec = (timestamp - lastTimeRef.current) / 1000;
-      lastTimeRef.current = timestamp;
+      // Velocidad de navegación 2x (más fluida y natural)
+      const speed = 2;
+      const baseSecPerLeg = 14 / speed;
+      const progressDelta = dt / baseSecPerLeg;
 
-      // Velocidad en km/s (aprox 15 km/h * speed factor)
-      const kmPerSecond = 1.2 * simulationSpeed;
+      setLegProgressFraction((prevFrac) => {
+        const nextFrac = prevFrac + progressDelta;
 
-      setCurrentLegIndex((segIdx) => {
-        if (segIdx >= totalSegments) {
-          setIsPlaying(false);
-          return totalSegments - 1;
+        if (nextFrac >= 1) {
+          const nextLeg = currentLegIndex + 1;
+          // Si llega al final de la ruta, reinicia el ciclo continuo al puerto base
+          if (nextLeg >= activeRouteCoordinates.length - 1) {
+            setCurrentLegIndex(0);
+            const pA = activeRouteCoordinates[0];
+            const pB = activeRouteCoordinates[1];
+            if (pA && pB) {
+              setVesselPosition(pA);
+              setVesselBearing(calculateBearing(pA[0], pA[1], pB[0], pB[1]));
+            }
+            return 0;
+          }
+          setCurrentLegIndex(nextLeg);
+          const pA = activeRouteCoordinates[nextLeg];
+          const pB = activeRouteCoordinates[nextLeg + 1];
+          if (pA && pB) {
+            setVesselBearing(calculateBearing(pA[0], pA[1], pB[0], pB[1]));
+          }
+          return 0;
         }
 
-        const p1 = coords[segIdx];
-        const p2 = coords[segIdx + 1];
-        const segDistKm = Math.max(0.05, computeDistanceKm(p1[0], p1[1], p2[0], p2[1]));
+        const pA = activeRouteCoordinates[currentLegIndex];
+        const pB = activeRouteCoordinates[currentLegIndex + 1];
+        if (pA && pB) {
+          const interpolated = interpolatePosition(pA[0], pA[1], pB[0], pB[1], nextFrac);
+          setVesselPosition(interpolated);
+          setVesselBearing(calculateBearing(pA[0], pA[1], pB[0], pB[1]));
+        }
 
-        setLegProgressFraction((prevFraction) => {
-          const stepFraction = (kmPerSecond * deltaSec) / segDistKm;
-          const nextFraction = prevFraction + stepFraction;
-
-          if (nextFraction >= 1.0) {
-            if (segIdx + 1 < totalSegments) {
-              const nextP = coords[segIdx + 2];
-              setVesselPosition(p2);
-              setVesselBearing(calculateBearing(p2[0], p2[1], nextP[0], nextP[1]));
-              setCurrentLegIndex(segIdx + 1);
-              return 0;
-            } else {
-              setVesselPosition(p2);
-              setIsPlaying(false);
-              return 1.0;
-            }
-          }
-
-          const pos = interpolatePosition(p1[0], p1[1], p2[0], p2[1], nextFraction);
-          setVesselPosition(pos);
-          setVesselBearing(calculateBearing(p1[0], p1[1], p2[0], p2[1]));
-
-          return nextFraction;
-        });
-
-        return segIdx;
+        return nextFrac;
       });
 
-      animFrameRef.current = requestAnimationFrame(animate);
+      animationFrameRef.current = requestAnimationFrame(animate);
     };
 
-    animFrameRef.current = requestAnimationFrame(animate);
+    animationFrameRef.current = requestAnimationFrame(animate);
 
     return () => {
-      if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
+      if (animationFrameRef.current) cancelAnimationFrame(animationFrameRef.current);
+      lastTimeRef.current = 0;
     };
-  }, [isSimulating, isPlaying, simulationSpeed, activeRouteCoordinates]);
-
-  // Overall Simulation Progress
-  const { progressPercent, currentTraversedKm } = useMemo(() => {
-    if (!isSimulating || activeRouteCoordinates.length < 2) {
-      return { progressPercent: 0, currentTraversedKm: 0 };
-    }
-    const totalDist = suggestedDistanceKm;
-    const progressFrac = (currentLegIndex + legProgressFraction) / Math.max(1, activeRouteCoordinates.length - 1);
-    const progressPercent = Math.min(100, Math.max(0, progressFrac * 100));
-    const currentTraversedKm = Number((totalDist * (progressPercent / 100)).toFixed(1));
-
-    return { progressPercent, currentTraversedKm };
-  }, [isSimulating, activeRouteCoordinates, currentLegIndex, legProgressFraction, suggestedDistanceKm]);
+  }, [isSimulating, currentLegIndex, activeRouteCoordinates]);
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-[#07151D] font-sans text-slate-100">
-      {/* 1. HEADER FLOTANTE ESTILO VERDE ABISAL TRANSLÚCIDO */}
+      {/* 1. HEADER FLOTANTE ESTILO VERDE ABISAL TRANSLÚCIDO CON CENTRO DE NOTIFICACIONES */}
       <Navbar
         weather={weather}
         activeTab={activeTab}
@@ -568,7 +601,53 @@ export const App: React.FC = () => {
         backendConnected={backendConnected}
         isBackendCalculating={isCalculatingBackend}
         onRefreshBackend={syncWithBackend}
+        notifications={notifications}
+        onNotificationClick={handleNotificationClick}
+        onMarkAllNotificationsRead={handleMarkAllNotificationsRead}
       />
+
+      {/* TOAST FLOTANTE DISCRETO DE NUEVAS ALERTAS DE SARGAZO */}
+      <AnimatePresence>
+        {activeToast && (
+          <motion.div
+            initial={{ opacity: 0, y: -20, scale: 0.95 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.95 }}
+            transition={{ duration: 0.25 }}
+            onClick={() => handleNotificationClick(activeToast)}
+            className="fixed top-20 right-4 md:right-6 z-50 max-w-sm cursor-pointer rounded-2xl bg-[#06292D]/92 backdrop-blur-md border border-amber-400/40 p-3.5 shadow-[0_12px_35px_rgba(0,0,0,0.65)] text-[#F0FDF4] font-sans flex items-start space-x-3 transition-transform hover:scale-[1.02] select-none"
+          >
+            <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-400/40 flex items-center justify-center flex-shrink-0 text-amber-300">
+              <Bell size={18} weight="duotone" className="animate-bounce" />
+            </div>
+            <div className="flex-1 min-w-0 pr-1">
+              <div className="flex items-center space-x-1.5">
+                <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                <h4 className="text-xs font-montserrat font-bold text-amber-200 truncate">
+                  {activeToast.title}
+                </h4>
+              </div>
+              <p className="text-[11px] text-slate-200 mt-1 leading-snug">
+                {activeToast.message}
+              </p>
+              <div className="mt-1.5 flex items-center space-x-2 text-[10px] text-teal-300 font-montserrat font-bold">
+                <span>Clic para centrar en el mapa</span>
+                <span>·</span>
+                <span className="text-slate-400">{activeToast.timestamp}</span>
+              </div>
+            </div>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setActiveToast(null);
+              }}
+              className="text-slate-400 hover:text-white p-1 rounded-lg text-xs cursor-pointer"
+            >
+              ✕
+            </button>
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* 2. FULLSCREEN SATELLITE MAP & FLOATING MODULES */}
       <main className="relative w-full h-full overflow-hidden">
@@ -585,31 +664,21 @@ export const App: React.FC = () => {
           layers={layers}
           metrics={metrics}
           suggestedRouteCoordinates={suggestedRouteCoordinates}
+          geoJsonData={geoJsonData}
+          sargassumClusters={sargassumClusters}
+          selectedClusterIds={selectedClusterIds}
+          onToggleCluster={handleToggleCluster}
+          isAddPointActive={isAddPointActive}
+          onCancelAddPointActive={() => setIsAddPointActive(false)}
           isSimulating={isSimulating}
           vesselPosition={vesselPosition}
           vesselBearing={vesselBearing}
           currentLegIndex={currentLegIndex}
           onCycleBasemapMode={handleCycleBasemapMode}
+          focusLocation={focusLocation}
         />
 
-        {/* 3. SIMULATION HUD - COMPACTO EN LA PARTE INFERIOR CENTRAL */}
-        {isSimulating && (
-          <SimulationHUD
-            isPlaying={isPlaying}
-            onTogglePlay={() => setIsPlaying(!isPlaying)}
-            onReset={handleResetSimulation}
-            onClose={handleStopSimulation}
-            speed={simulationSpeed}
-            onChangeSpeed={setSimulationSpeed}
-            progressPercent={progressPercent}
-            currentLegIndex={currentLegIndex}
-            stops={simulationStops}
-            totalDistanceKm={suggestedDistanceKm}
-            currentDistanceKm={currentTraversedKm}
-          />
-        )}
-
-        {/* 4. LEFT CONTROL PANEL (Separación vertical 24px+ y 100% Ruta Sugerida) */}
+        {/* 3. LEFT CONTROL PANEL (Separación vertical 28px–32px y 100% Ruta Sugerida) */}
         <LeftSidebar
           ports={ports}
           selectedPortId={selectedPortId}
@@ -638,23 +707,14 @@ export const App: React.FC = () => {
           backendError={backendError}
           onMoveWaypointUp={handleMoveWaypointUp}
           onMoveWaypointDown={handleMoveWaypointDown}
+          isAddPointActive={isAddPointActive}
+          onToggleAddPointActive={() => setIsAddPointActive(!isAddPointActive)}
+          sargassumClusters={sargassumClusters}
+          selectedClusterIds={selectedClusterIds}
+          onToggleCluster={handleToggleCluster}
         />
 
-        {/* 5. RIGHT METRICS & SARGAZO FORECAST PANEL (Separación vertical 24px+ y Cero Diésel) */}
-        <RightMetricsPanel
-          metrics={metrics}
-          detections={detections}
-          selectedDetectionIds={selectedDetectionIds}
-          onToggleDetection={handleToggleDetection}
-          isSimulating={isSimulating}
-          onStartSimulation={handleStartSimulation}
-          onStopSimulation={handleStopSimulation}
-          isOpen={isRightOpen}
-          onToggleOpen={() => setIsRightOpen(!isRightOpen)}
-          activeStopIndex={currentLegIndex}
-        />
-
-        {/* 6. BOTTOM TELEMETRY DOCK (Corrientes, Oleaje, Viento en Verde Abisal) */}
+        {/* 4. BOTTOM TELEMETRY DOCK (Corrientes, Oleaje, Viento en Verde Abisal) */}
         <BottomTelemetryBar weather={weather} />
 
         {/* 7. FLOATING MAP LEGEND (Esquina inferior izquierda en Verde Abisal) */}

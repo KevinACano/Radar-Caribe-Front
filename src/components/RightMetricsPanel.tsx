@@ -4,7 +4,7 @@ import {
   Boat, 
   MapPin, 
   NavigationArrow, 
-  Sparkle, 
+  Waves, 
   CaretRight, 
   CaretLeft, 
   Warning, 
@@ -18,9 +18,9 @@ interface RightMetricsPanelProps {
   detections: SargassumDetection[];
   selectedDetectionIds: string[];
   onToggleDetection: (id: string) => void;
-  isSimulating: boolean;
-  onStartSimulation: () => void;
-  onStopSimulation: () => void;
+  isSimulating?: boolean;
+  onStartSimulation?: () => void;
+  onStopSimulation?: () => void;
   isOpen: boolean;
   onToggleOpen: () => void;
   vesselName?: string;
@@ -52,7 +52,7 @@ export const RightMetricsPanel: React.FC<RightMetricsPanelProps> = ({
 
   return (
     <>
-      {/* Toggle Button when closed (Separado 24px+ hacia abajo del Header) */}
+      {/* Toggle Button when closed (Separado 32px hacia abajo del Header) */}
       {!isOpen && (
         <motion.button
           initial={{ opacity: 0, x: 20 }}
@@ -60,7 +60,7 @@ export const RightMetricsPanel: React.FC<RightMetricsPanelProps> = ({
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
           onClick={onToggleOpen}
-          className="absolute top-[92px] right-4 z-40 bg-[#06292D]/85 backdrop-blur-md text-[#CCFBF1] p-2.5 rounded-2xl border border-teal-400/20 shadow-floating transition-all flex items-center space-x-2 text-xs font-bold pointer-events-auto font-sans cursor-pointer"
+          className="absolute top-[116px] right-4 z-40 bg-[#06292D]/85 backdrop-blur-md text-[#CCFBF1] p-2.5 rounded-2xl border border-teal-400/20 shadow-floating transition-all flex items-center space-x-2 text-xs font-bold pointer-events-auto font-sans cursor-pointer"
           title="Abrir Pronósticos y Métricas"
         >
           <CaretLeft size={16} weight="bold" className="text-[#2DD4BF]" />
@@ -68,7 +68,7 @@ export const RightMetricsPanel: React.FC<RightMetricsPanelProps> = ({
         </motion.button>
       )}
 
-      {/* Main Container on Right (Verde Abisal Translúcido) */}
+      {/* Main Container on Right (Verde Abisal Translúcido con separación del header) */}
       <AnimatePresence>
         {isOpen && (
           <motion.aside
@@ -76,7 +76,7 @@ export const RightMetricsPanel: React.FC<RightMetricsPanelProps> = ({
             animate={{ opacity: 1, x: 0, scale: 1 }}
             exit={{ opacity: 0, x: 40, scale: 0.96 }}
             transition={{ type: 'spring', stiffness: 350, damping: 28 }}
-            className="absolute top-[92px] right-4 bottom-20 z-40 w-80 md:w-[350px] flex flex-col gap-3 select-none pointer-events-auto font-sans"
+            className="absolute top-[116px] right-4 bottom-20 z-40 w-80 md:w-[350px] flex flex-col gap-3 select-none pointer-events-auto font-sans"
           >
             {/* CARD: Pronósticos del Sargazo & Telemetría Operativa */}
             <motion.div 
@@ -86,7 +86,7 @@ export const RightMetricsPanel: React.FC<RightMetricsPanelProps> = ({
               <div className="flex items-center justify-between pb-1 border-b border-teal-400/20">
                 <div>
                   <h3 className="text-sm font-montserrat font-extrabold text-white tracking-tight flex items-center gap-2">
-                    <Sparkle size={18} weight="duotone" className="text-[#2DD4BF]" />
+                    <Waves size={18} weight="duotone" className="text-[#2DD4BF]" />
                     Pronósticos de Sargazo
                   </h3>
                   <p className="text-[10.5px] text-teal-200/80">
@@ -242,21 +242,6 @@ export const RightMetricsPanel: React.FC<RightMetricsPanelProps> = ({
                       )}
                     </div>
                   )}
-
-                  {/* BOTÓN: Simular Recorrido (con icono Boat de Phosphor) */}
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={isSimulating ? onStopSimulation : onStartSimulation}
-                    className={`w-full py-2.5 px-3 rounded-xl font-montserrat font-extrabold text-xs transition-all flex items-center justify-center space-x-2 border shadow-md cursor-pointer ${
-                      isSimulating
-                        ? 'bg-amber-600/90 text-white border-amber-400/50 hover:bg-amber-600 shadow-[0_0_15px_rgba(245,158,11,0.4)]'
-                        : 'bg-gradient-to-r from-[#0F5247] via-[#0D9488] to-[#2DD4BF] text-slate-950 border-teal-300/40 hover:brightness-110 shadow-[0_0_15px_rgba(45,212,191,0.35)]'
-                    }`}
-                  >
-                    <Boat size={17} weight="duotone" className={isSimulating ? 'text-white' : 'text-slate-950'} />
-                    <span>{isSimulating ? 'Detener Simulación' : 'Simular Recorrido'}</span>
-                  </motion.button>
                 </div>
               )}
             </motion.div>

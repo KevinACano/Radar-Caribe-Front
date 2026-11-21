@@ -117,3 +117,33 @@
   border: 1px solid rgba(45, 212, 191, 0.5);
   box-shadow: 0 0 20px rgba(20, 184, 166, 0.2);
 }
+
+/* Glassmorphism GeoJSON Tooltip */
+.custom-geojson-tooltip {
+  background: rgba(6, 41, 45, 0.94) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  border: 1px solid rgba(45, 212, 191, 0.4) !important;
+  border-radius: 12px !important;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.6) !important;
+  color: #F0FDF4 !important;
+  padding: 0 !important;
+}
+.custom-geojson-tooltip::before {
+  border-top-color: rgba(6, 41, 45, 0.94) !important;
+}
+
+/* Glassmorphism Port Tooltip */
+.custom-port-tooltip {
+  background: rgba(6, 41, 45, 0.94) !important;
+  backdrop-filter: blur(16px) !important;
+  -webkit-backdrop-filter: blur(16px) !important;
+  border: 1px solid rgba(45, 212, 191, 0.4) !important;
+  border-radius: 8px !important;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.5) !important;
+  color: #F0FDF4 !important;
+  padding: 4px 8px !important;
+}
+.custom-port-tooltip::before {
+  border-top-color: rgba(6, 41, 45, 0.94) !important;
+}

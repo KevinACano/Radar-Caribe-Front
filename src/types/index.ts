@@ -158,4 +158,81 @@ export interface MissionPlan {
   status: 'Programada' | 'En curso' | 'Completada';
 }
 
+export interface SargassumGeoJsonCellProperties {
+  cell_i: number;
+  cell_j: number;
+  presence_probability: number;
+  horizon_hours: number;
+  prediction_datetime: string;
+}
+
+export interface SargassumGeoJsonFeature {
+  type: 'Feature';
+  id?: string | number;
+  properties: SargassumGeoJsonCellProperties;
+  geometry: {
+    type: 'Polygon';
+    coordinates: number[][][]; // [lon, lat][]
+  };
+}
+
+export interface SargassumGeoJsonMetadata {
+  run_type?: string;
+  note?: string;
+  t0?: string;
+  horizon_hours?: number;
+  grid_resolution_km?: number;
+  min_probability_exported?: number;
+  semantics?: string;
+}
+
+export interface SargassumGeoJsonCollection {
+  type: 'FeatureCollection';
+  metadata?: SargassumGeoJsonMetadata;
+  features: SargassumGeoJsonFeature[];
+}
+
+export interface SelectedGeoJsonCell {
+  id: string; // `cell-${cell_i}-${cell_j}`
+  cell_i: number;
+  cell_j: number;
+  presence_probability: number;
+  prediction_datetime: string;
+  centroidLat: number;
+  centroidLng: number;
+  priority: Priority;
+  confidencePercent: number;
+  feature: SargassumGeoJsonFeature;
+}
+
+export interface SargassumCluster {
+  id: string; // `cluster-${clusterId}`
+  name: string;
+  clusterId: number;
+  cellCount: number;
+  maxProb: number;
+  avgProb: number;
+  centroidLat: number;
+  centroidLng: number;
+  estimatedMassTons: number;
+  datetime: string;
+  features: SargassumGeoJsonFeature[];
+}
+
+export interface AppNotification {
+  id: string;
+  title: string;
+  message: string;
+  timestamp: string;
+  read: boolean;
+  type: 'sargassum_alert' | 'route_update' | 'weather_alert';
+  locationName?: string;
+  lat?: number;
+  lng?: number;
+  massTons?: number;
+  probPercent?: number;
+}
+
+
+
 
