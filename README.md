@@ -63,7 +63,7 @@ npm run preview
 - React Leaflet y Leaflet
 
 
-## 📄 Licencia y derechos de autor
+## Licencia y derechos de autor
 
 Copyright © 2026 MonkeyDevs. Todos los derechos reservados.
 
