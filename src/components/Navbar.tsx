@@ -21,6 +21,36 @@ interface NavbarProps {
   onMarkAllNotificationsRead?: () => void;
 }
 
+
+const GLASS =
+  'pointer-events-auto relative rounded-2xl bg-gradient-to-r from-[#DCE5D3]/35 to-[#CFDCC6]/30 hover:from-[#DCE5D3]/45 hover:to-[#CFDCC6]/40 backdrop-blur-xl backdrop-saturate-150 backdrop-brightness-90 border border-white/40 shadow-[0_10px_35px_rgba(0,0,0,0.25),inset_0_1px_0_rgba(255,255,255,0.55),inset_0_-1px_0_rgba(255,255,255,0.15)] transition-colors duration-300 px-4 md:px-6 py-2 flex items-center text-white font-sans [text-shadow:0_1px_3px_rgba(4,20,16,0.7)]';
+
+const GlassBar: React.FC<{ reduceMotion: boolean | null; delay?: number; children: React.ReactNode }> = ({
+  reduceMotion,
+  delay = 0,
+  children,
+}) => (
+  <motion.header
+    initial={reduceMotion ? false : { opacity: 0, y: -14 }}
+    animate={{ opacity: 1, y: 0 }}
+    whileHover="hover"
+    transition={{ duration: 0.45, ease: 'easeOut', delay }}
+    className={GLASS}
+  >
+    {!reduceMotion && (
+      <div className="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none">
+        <motion.div
+          variants={{ hover: { x: '260%' } }}
+          initial={{ x: '-60%' }}
+          transition={{ duration: 0.9, ease: 'easeInOut' }}
+          className="absolute inset-y-0 w-1/4 -skew-x-12 bg-gradient-to-r from-transparent via-white/30 to-transparent"
+        />
+      </div>
+    )}
+    {children}
+  </motion.header>
+);
+
 export const Navbar: React.FC<NavbarProps> = ({ 
   activeTab = 'operativo',
   onSelectTab,
@@ -43,23 +73,8 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   return (
     <div className="absolute top-4 left-4 right-4 md:top-5 md:left-6 md:right-6 z-50 pointer-events-none select-none">
-      <motion.header
-        initial={reduceMotion ? false : { opacity: 0, y: -14 }}
-        animate={{ opacity: 1, y: 0 }}
-        whileHover="hover"
-        transition={{ duration: 0.45, ease: 'easeOut' }}
-        className="pointer-events-auto relative rounded-2xl bg-gradient-to-r from-[#DCE5D3]/35 to-[#CFDCC6]/30 hover:from-[#DCE5D3]/45 hover:to-[#CFDCC6]/40 backdrop-blur-xl backdrop-saturate-150 backdrop-brightness-90 border border-white/40 shadow-[0_10px_35px_rgba(0,0,0,0.25),inset_0_1px_0_rgba(255,255,255,0.55),inset_0_-1px_0_rgba(255,255,255,0.15)] transition-colors duration-300 px-4 md:px-6 py-2 flex items-center justify-between text-white font-sans [text-shadow:0_1px_3px_rgba(4,20,16,0.7)]"
-      >
-        {!reduceMotion && (
-          <div className="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none">
-            <motion.div
-              variants={{ hover: { x: '260%' } }}
-              initial={{ x: '-60%' }}
-              transition={{ duration: 0.9, ease: 'easeInOut' }}
-              className="absolute inset-y-0 w-1/4 -skew-x-12 bg-gradient-to-r from-transparent via-white/30 to-transparent"
-            />
-          </div>
-        )}
+      <div className="flex items-start justify-between gap-4">
+      <GlassBar reduceMotion={reduceMotion}>
         {/* Left: Branding - Logo + Montserrat Heading (Click to return to map) */}
         <motion.div 
           whileHover={{ scale: 1.02 }}
@@ -84,6 +99,8 @@ export const Navbar: React.FC<NavbarProps> = ({
           </div>
         </motion.div>
 
+      </GlassBar>
+      <GlassBar reduceMotion={reduceMotion} delay={0.08}>
         {/* Right: Planificación Button + Region Selector + Notifications Bell */}
         <div className="flex items-center space-x-2 md:space-x-3 text-xs">
           {/* Botón de Planificación */}
@@ -245,7 +262,8 @@ export const Navbar: React.FC<NavbarProps> = ({
             </AnimatePresence>
           </div>
         </div>
-      </motion.header>
+      </GlassBar>
+      </div>
     </div>
   );
 };
