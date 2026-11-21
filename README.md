@@ -61,3 +61,12 @@ npm run preview
 - Vite
 - Tailwind CSS
 - React Leaflet y Leaflet
+
+
+## 📄 Licencia y derechos de autor
+
+Copyright © 2026 MonkeyDevs. Todos los derechos reservados.
+
+Este proyecto tiene como objetivo contribuir a la protección del medio ambiente mediante el monitoreo del sargazo y la optimización de rutas de recolección, considerando condiciones oceanográficas y zonas de importancia ecológica.
+
+La disponibilidad pública del código no implica autorización automática para su uso, modificación, distribución o explotación comercial. Los permisos correspondientes dependen de la licencia aplicable.
