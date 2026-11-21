@@ -100,7 +100,12 @@ export const Navbar: React.FC<NavbarProps> = ({
         </motion.div>
 
       </GlassBar>
-      <GlassBar reduceMotion={reduceMotion} delay={0.08}>
+      <motion.div
+        initial={reduceMotion ? false : { opacity: 0, y: -14 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.45, ease: 'easeOut', delay: 0.08 }}
+        className="pointer-events-auto flex items-center gap-2 font-sans"
+      >
         {/* Right: Planificación Button + Region Selector + Notifications Bell */}
         <div className="flex items-center space-x-2 md:space-x-3 text-xs">
           {/* Botón de Planificación */}
@@ -108,13 +113,13 @@ export const Navbar: React.FC<NavbarProps> = ({
             whileHover={{ scale: 1.03 }}
             whileTap={{ scale: 0.97 }}
             onClick={() => onSelectTab && onSelectTab('planificacion')}
-            className={`focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-1 focus-visible:ring-offset-transparent flex items-center space-x-2 px-3.5 py-1.5 rounded-xl transition-all font-montserrat font-bold cursor-pointer border ${
+            className={`focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-1 focus-visible:ring-offset-[#07151D] flex items-center space-x-2 px-3.5 py-1.5 rounded-xl transition-all font-montserrat font-bold cursor-pointer border ${
               activeTab === 'planificacion'
-                ? 'bg-white/30 text-white border-white/80 shadow-md'
-                : 'bg-white/15 text-white border-white/50 hover:bg-white/25 hover:border-white/80'
+                ? 'bg-teal-500 text-slate-950 border-teal-300 shadow-[0_0_15px_rgba(45,212,191,0.4)]'
+                : 'bg-[#06292D]/85 backdrop-blur-md border border-teal-400/20 shadow-floating text-[#CCFBF1] hover:text-white hover:bg-[#08383D]/90'
             }`}
           >
-            <CalendarCheck size={16} weight="duotone" className={activeTab === 'planificacion' ? 'text-white' : 'text-[#E3EDDB]'} />
+            <CalendarCheck size={16} weight="duotone" className={activeTab === 'planificacion' ? 'text-slate-950' : 'text-[#2DD4BF]'} />
             <span>Planificación</span>
           </motion.button>
 
@@ -127,12 +132,12 @@ export const Navbar: React.FC<NavbarProps> = ({
                 setShowRegionMenu(!showRegionMenu);
                 setShowNotifMenu(false);
               }}
-              className="focus:outline-none focus-visible:ring-2 focus-visible:ring-white flex items-center space-x-1.5 bg-white/15 hover:bg-white/25 border border-white/50 px-3 py-1.5 rounded-xl text-white text-xs font-bold font-montserrat transition-all shadow-sm cursor-pointer"
+              className="focus:outline-none focus-visible:ring-2 focus-visible:ring-white flex items-center space-x-1.5 bg-[#06292D]/85 hover:bg-[#08383D]/90 backdrop-blur-md border border-teal-400/20 shadow-floating px-3 py-1.5 rounded-xl text-[#F0FDF4] text-xs font-bold font-montserrat transition-all shadow-sm cursor-pointer"
             >
-              <MapPin size={15} weight="bold" className="text-[#E3EDDB]" />
+              <MapPin size={15} weight="bold" className="text-[#2DD4BF]" />
               <span className="hidden sm:inline">{selectedRegion.split(' (')[0]}</span>
               <span className="sm:hidden">Caribe</span>
-              <CaretDown size={12} weight="bold" className="text-[#E3EDDB]" />
+              <CaretDown size={12} weight="bold" className="text-teal-300" />
             </motion.button>
 
             <AnimatePresence>
@@ -173,13 +178,13 @@ export const Navbar: React.FC<NavbarProps> = ({
                 setShowNotifMenu(!showNotifMenu);
                 setShowRegionMenu(false);
               }}
-              className="focus:outline-none focus-visible:ring-2 focus-visible:ring-white relative p-2 rounded-xl bg-white/15 text-white hover:bg-white/25 border border-white/50 transition-all cursor-pointer flex items-center justify-center"
+              className="focus:outline-none focus-visible:ring-2 focus-visible:ring-white relative p-2 rounded-xl bg-[#06292D]/85 backdrop-blur-md border border-teal-400/20 shadow-floating text-[#CCFBF1] hover:text-white hover:bg-[#08383D]/90 transition-all cursor-pointer flex items-center justify-center"
               title="Centro de Alertas y Predicciones"
             >
               <Bell
                 size={17}
                 weight={unreadCount > 0 ? 'duotone' : 'bold'}
-                className={unreadCount > 0 ? 'text-amber-300' : 'text-[#E3EDDB]'}
+                className={unreadCount > 0 ? 'text-amber-400' : 'text-[#2DD4BF]'}
               />
               {unreadCount > 0 && (
                 <span className="absolute -top-1 -right-1 bg-amber-400 text-[#06292D] text-[10px] font-extrabold w-4 h-4 rounded-full flex items-center justify-center font-montserrat shadow-md animate-pulse">
@@ -262,7 +267,7 @@ export const Navbar: React.FC<NavbarProps> = ({
             </AnimatePresence>
           </div>
         </div>
-      </GlassBar>
+      </motion.div>
       </div>
     </div>
   );
