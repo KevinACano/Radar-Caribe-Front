@@ -25,7 +25,7 @@ export const MapLegend: React.FC<MapLegendProps> = ({
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: 'spring', stiffness: 300, damping: 25, delay: 0.1 }}
-      className={`absolute bottom-16 left-4 z-30 pointer-events-auto select-none max-w-xs ${className}`}
+      className={`absolute bottom-6 right-16 z-[1000] pointer-events-auto select-none w-64 max-h-[60vh] overflow-y-auto ${className}`}
     >
       <div className="bg-[#06292D]/85 backdrop-blur-md border border-teal-400/20 shadow-floating rounded-2xl p-3 text-xs text-[#F0FDF4] font-sans">
         {/* Header with collapse button */}
