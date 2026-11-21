@@ -48,7 +48,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         animate={{ opacity: 1, y: 0 }}
         whileHover="hover"
         transition={{ duration: 0.45, ease: 'easeOut' }}
-        className="pointer-events-auto relative rounded-2xl bg-gradient-to-r from-[#DCE5D3]/35 to-[#CFDCC6]/30 hover:from-[#DCE5D3]/45 hover:to-[#CFDCC6]/40 backdrop-blur-xl backdrop-saturate-150 backdrop-brightness-125 border border-white/40 shadow-[0_10px_35px_rgba(0,0,0,0.25),inset_0_1px_0_rgba(255,255,255,0.55),inset_0_-1px_0_rgba(255,255,255,0.15)] transition-colors duration-300 px-4 md:px-6 py-2 flex items-center justify-between text-[#0B2620] font-sans [text-shadow:0_1px_2px_rgba(255,255,255,0.55)]"
+        className="pointer-events-auto relative rounded-2xl bg-gradient-to-r from-[#DCE5D3]/35 to-[#CFDCC6]/30 hover:from-[#DCE5D3]/45 hover:to-[#CFDCC6]/40 backdrop-blur-xl backdrop-saturate-150 backdrop-brightness-90 border border-white/40 shadow-[0_10px_35px_rgba(0,0,0,0.25),inset_0_1px_0_rgba(255,255,255,0.55),inset_0_-1px_0_rgba(255,255,255,0.15)] transition-colors duration-300 px-4 md:px-6 py-2 flex items-center justify-between text-white font-sans [text-shadow:0_1px_3px_rgba(4,20,16,0.7)]"
       >
         {!reduceMotion && (
           <div className="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none">
@@ -74,11 +74,11 @@ export const Navbar: React.FC<NavbarProps> = ({
             className="h-14 md:h-16 w-auto object-contain drop-shadow-[0_3px_6px_rgba(15,46,39,0.35)] transition-transform duration-300"
           />
 
-          <div className="border-l border-[#0F2E27]/25 pl-3 flex flex-col justify-center">
-            <h1 className="text-lg md:text-xl font-display font-extrabold tracking-tight text-[#0F2E27] leading-tight">
+          <div className="border-l border-white/40 pl-3 flex flex-col justify-center">
+            <h1 className="text-lg md:text-xl font-display font-extrabold tracking-tight text-white leading-tight">
               Radar Caribe
             </h1>
-            <p className="text-[10px] md:text-[11px] text-[#2F5A4C] font-bold tracking-normal font-display mt-0.5">
+            <p className="text-[10px] md:text-[11px] text-[#E3EDDB] font-bold tracking-normal font-display mt-0.5">
               Radar de Sargazo en el Caribe
             </p>
           </div>
@@ -91,13 +91,13 @@ export const Navbar: React.FC<NavbarProps> = ({
             whileHover={{ scale: 1.03 }}
             whileTap={{ scale: 0.97 }}
             onClick={() => onSelectTab && onSelectTab('planificacion')}
-            className={`focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0F4C42] focus-visible:ring-offset-1 focus-visible:ring-offset-[#DCE5D3] flex items-center space-x-2 px-3.5 py-1.5 rounded-xl transition-all font-montserrat font-bold cursor-pointer border ${
+            className={`focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-1 focus-visible:ring-offset-transparent flex items-center space-x-2 px-3.5 py-1.5 rounded-xl transition-all font-montserrat font-bold cursor-pointer border ${
               activeTab === 'planificacion'
-                ? 'bg-[#0F4C42] text-white border-[#0F4C42] shadow-md'
-                : 'bg-white/50 text-[#0F2E27] border-[#0F4C42]/40 hover:bg-white/80 hover:border-[#0F4C42]'
+                ? 'bg-white/30 text-white border-white/80 shadow-md'
+                : 'bg-white/15 text-white border-white/50 hover:bg-white/25 hover:border-white/80'
             }`}
           >
-            <CalendarCheck size={16} weight="duotone" className={activeTab === 'planificacion' ? 'text-white' : 'text-[#0F4C42]'} />
+            <CalendarCheck size={16} weight="duotone" className={activeTab === 'planificacion' ? 'text-white' : 'text-[#E3EDDB]'} />
             <span>Planificación</span>
           </motion.button>
 
@@ -110,12 +110,12 @@ export const Navbar: React.FC<NavbarProps> = ({
                 setShowRegionMenu(!showRegionMenu);
                 setShowNotifMenu(false);
               }}
-              className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0F4C42] flex items-center space-x-1.5 bg-white/50 hover:bg-white/80 border border-[#0F4C42]/40 px-3 py-1.5 rounded-xl text-[#0F2E27] text-xs font-bold font-montserrat transition-all shadow-sm cursor-pointer"
+              className="focus:outline-none focus-visible:ring-2 focus-visible:ring-white flex items-center space-x-1.5 bg-white/15 hover:bg-white/25 border border-white/50 px-3 py-1.5 rounded-xl text-white text-xs font-bold font-montserrat transition-all shadow-sm cursor-pointer"
             >
-              <MapPin size={15} weight="bold" className="text-[#0F4C42]" />
+              <MapPin size={15} weight="bold" className="text-[#E3EDDB]" />
               <span className="hidden sm:inline">{selectedRegion.split(' (')[0]}</span>
               <span className="sm:hidden">Caribe</span>
-              <CaretDown size={12} weight="bold" className="text-[#0F4C42]" />
+              <CaretDown size={12} weight="bold" className="text-[#E3EDDB]" />
             </motion.button>
 
             <AnimatePresence>
@@ -156,13 +156,13 @@ export const Navbar: React.FC<NavbarProps> = ({
                 setShowNotifMenu(!showNotifMenu);
                 setShowRegionMenu(false);
               }}
-              className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0F4C42] relative p-2 rounded-xl bg-white/50 text-[#0F2E27] hover:bg-white/80 border border-[#0F4C42]/40 transition-all cursor-pointer flex items-center justify-center"
+              className="focus:outline-none focus-visible:ring-2 focus-visible:ring-white relative p-2 rounded-xl bg-white/15 text-white hover:bg-white/25 border border-white/50 transition-all cursor-pointer flex items-center justify-center"
               title="Centro de Alertas y Predicciones"
             >
               <Bell
                 size={17}
                 weight={unreadCount > 0 ? 'duotone' : 'bold'}
-                className={unreadCount > 0 ? 'text-amber-700' : 'text-[#0F4C42]'}
+                className={unreadCount > 0 ? 'text-amber-300' : 'text-[#E3EDDB]'}
               />
               {unreadCount > 0 && (
                 <span className="absolute -top-1 -right-1 bg-amber-400 text-[#06292D] text-[10px] font-extrabold w-4 h-4 rounded-full flex items-center justify-center font-montserrat shadow-md animate-pulse">
