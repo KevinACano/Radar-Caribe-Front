@@ -1,0 +1,119 @@
+@import 'leaflet/dist/leaflet.css';
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+  color: #F1F5F9;
+  background-color: #07151D;
+}
+
+/* Dark Glassmorphism Scrollbar */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+::-webkit-scrollbar-track {
+  background: rgba(15, 23, 42, 0.4);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(45, 212, 191, 0.25);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: rgba(45, 212, 191, 0.5);
+}
+
+/* 
+ * CRITICAL: Enforce Leaflet container and panes to stay strictly below dashboard floating panels.
+ * Dashboard panels are assigned z-40 / z-50, so Leaflet panes must never exceed z-10.
+ */
+.leaflet-container {
+  width: 100%;
+  height: 100%;
+  background-color: #0B1D28 !important;
+  font-family: inherit;
+  z-index: 1 !important;
+}
+
+.leaflet-map-pane {
+  z-index: 2 !important;
+}
+
+.leaflet-tile-pane {
+  z-index: 2 !important;
+}
+
+.leaflet-overlay-pane {
+  z-index: 3 !important;
+}
+
+.leaflet-shadow-pane {
+  z-index: 4 !important;
+}
+
+.leaflet-marker-pane {
+  z-index: 5 !important;
+}
+
+.leaflet-tooltip-pane {
+  z-index: 6 !important;
+}
+
+.leaflet-popup-pane {
+  z-index: 7 !important;
+}
+
+.leaflet-top,
+.leaflet-bottom {
+  z-index: 8 !important;
+}
+
+/* Dark Glassmorphism Leaflet Popup */
+.custom-leaflet-popup .leaflet-popup-content-wrapper {
+  background: rgba(11, 29, 40, 0.92) !important;
+  backdrop-filter: blur(20px) !important;
+  border: 1px solid rgba(45, 212, 191, 0.3) !important;
+  border-radius: 18px !important;
+  box-shadow: 0 20px 40px -10px rgba(0, 0, 0, 0.6), 0 0 15px rgba(20, 184, 166, 0.15) !important;
+  padding: 0 !important;
+  color: #F1F5F9 !important;
+}
+
+.custom-leaflet-popup .leaflet-popup-content {
+  margin: 0 !important;
+  line-height: 1.4 !important;
+}
+
+.custom-leaflet-popup .leaflet-popup-tip {
+  background: rgba(11, 29, 40, 0.92) !important;
+}
+
+/* Glassmorphism utility layer */
+.glass-panel {
+  background: rgba(11, 29, 40, 0.78);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.45), inset 0 1px 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.glass-panel-subtle {
+  background: rgba(255, 255, 255, 0.05);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.glass-panel-active {
+  background: rgba(20, 184, 166, 0.15);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(45, 212, 191, 0.5);
+  box-shadow: 0 0 20px rgba(20, 184, 166, 0.2);
+}
