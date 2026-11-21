@@ -1,9 +1,8 @@
-import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import React from 'react';
+import { motion } from 'motion/react';
 import { 
   CalendarCheck, 
-  MapPin, 
-  CaretDown 
+  MapPin
 } from '@phosphor-icons/react';
 import { MaritimeWeather } from '../types';
 
@@ -21,15 +20,6 @@ export const Navbar: React.FC<NavbarProps> = ({
   activeTab = 'operativo',
   onSelectTab,
 }) => {
-  const [selectedRegion, setSelectedRegion] = useState('Caribe mexicano');
-  const [showRegionMenu, setShowRegionMenu] = useState(false);
-
-  const regions = [
-    'Caribe mexicano (Cancún – Cozumel)',
-    'Costa Maya (Mahahual – Xcalak)',
-    'Riviera Maya (Tulum – P. Carmen)',
-  ];
-
   return (
     <div className="absolute top-3 left-3 right-3 md:top-4 md:left-6 md:right-6 z-50 pointer-events-none select-none">
       <motion.header
@@ -79,47 +69,10 @@ export const Navbar: React.FC<NavbarProps> = ({
             <span>Planificación</span>
           </motion.button>
 
-          {/* Region Selector */}
-          <div className="relative">
-            <motion.button
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.98 }}
-              onClick={() => setShowRegionMenu(!showRegionMenu)}
-              className="flex items-center space-x-1.5 bg-[#06292D]/90 hover:bg-[#08383D] border border-teal-400/25 px-3 py-1.5 rounded-xl text-[#F0FDF4] text-xs font-bold font-montserrat transition-all shadow-sm cursor-pointer"
-            >
-              <MapPin size={15} weight="bold" className="text-[#2DD4BF]" />
-              <span className="hidden sm:inline">{selectedRegion.split(' (')[0]}</span>
-              <span className="sm:hidden">Caribe</span>
-              <CaretDown size={12} weight="bold" className="text-teal-300" />
-            </motion.button>
-
-            <AnimatePresence>
-              {showRegionMenu && (
-                <motion.div
-                  initial={{ opacity: 0, y: 8, scale: 0.95 }}
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 8, scale: 0.95 }}
-                  className="absolute right-0 mt-2 w-64 bg-[#06292D]/95 backdrop-blur-2xl border border-teal-400/30 rounded-2xl shadow-2xl p-1.5 z-50 text-xs font-sans"
-                >
-                  {regions.map((reg) => (
-                    <button
-                      key={reg}
-                      onClick={() => {
-                        setSelectedRegion(reg);
-                        setShowRegionMenu(false);
-                      }}
-                      className={`w-full text-left px-3 py-2 rounded-xl transition-colors font-medium cursor-pointer ${
-                        selectedRegion === reg
-                          ? 'bg-teal-500/30 text-[#2DD4BF] font-bold border border-teal-400/30'
-                          : 'text-[#F0FDF4] hover:bg-white/10'
-                      }`}
-                    >
-                      {reg}
-                    </button>
-                  ))}
-                </motion.div>
-              )}
-            </AnimatePresence>
+          {/* Región fija */}
+          <div className="flex items-center space-x-1.5 bg-[#06292D]/90 border border-teal-400/25 px-3 py-1.5 rounded-xl text-[#F0FDF4] text-xs font-bold font-montserrat shadow-sm">
+            <MapPin size={15} weight="bold" className="text-[#2DD4BF]" />
+            <span>Caribe mexicano</span>
           </div>
         </div>
       </motion.header>
