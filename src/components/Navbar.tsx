@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
 import { 
-  CalendarCheck, 
   MapPin, 
   CaretDown,
   Bell
@@ -11,8 +10,6 @@ import { MaritimeWeather, AppNotification } from '../types';
 interface NavbarProps {
   weather?: MaritimeWeather;
   onOpenInfoModal?: () => void;
-  activeTab?: 'operativo' | 'planificacion';
-  onSelectTab?: (tab: 'operativo' | 'planificacion') => void;
   backendConnected?: boolean;
   isBackendCalculating?: boolean;
   onRefreshBackend?: () => void;
@@ -52,8 +49,6 @@ const GlassBar: React.FC<{ reduceMotion: boolean | null; delay?: number; childre
 );
 
 export const Navbar: React.FC<NavbarProps> = ({ 
-  activeTab = 'operativo',
-  onSelectTab,
   notifications = [],
   onNotificationClick,
   onMarkAllNotificationsRead,
@@ -79,9 +74,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         <motion.div 
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
-          onClick={() => onSelectTab && onSelectTab('operativo')}
-          className="cursor-pointer flex items-center space-x-3.5"
-          title="Radar Caribe · Volver al mapa principal"
+          className="flex items-center space-x-3.5"
         >
           <img 
             src="/Radar Caribe.png" 
@@ -108,21 +101,6 @@ export const Navbar: React.FC<NavbarProps> = ({
       >
         {/* Right: Planificación Button + Region Selector + Notifications Bell */}
         <div className="flex items-center space-x-2 md:space-x-3 text-xs">
-          {/* Botón de Planificación */}
-          <motion.button
-            whileHover={{ scale: 1.03 }}
-            whileTap={{ scale: 0.97 }}
-            onClick={() => onSelectTab && onSelectTab('planificacion')}
-            className={`focus:outline-none focus-visible:ring-2 focus-visible:ring-white focus-visible:ring-offset-1 focus-visible:ring-offset-[#07151D] flex items-center space-x-2 px-3.5 py-1.5 rounded-xl transition-all font-montserrat font-bold cursor-pointer border ${
-              activeTab === 'planificacion'
-                ? 'bg-teal-500 text-slate-950 border-teal-300 shadow-[0_0_15px_rgba(45,212,191,0.4)]'
-                : 'bg-[#06292D]/85 backdrop-blur-md border border-teal-400/20 shadow-floating text-[#CCFBF1] hover:text-white hover:bg-[#08383D]/90'
-            }`}
-          >
-            <CalendarCheck size={16} weight="duotone" className={activeTab === 'planificacion' ? 'text-slate-950' : 'text-[#2DD4BF]'} />
-            <span>Planificación</span>
-          </motion.button>
-
           {/* Selector de Región */}
           <div className="relative">
             <motion.button

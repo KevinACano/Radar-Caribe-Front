@@ -38,25 +38,6 @@ export interface DashboardLayers {
   coordinates: boolean;
 }
 
-export interface MissionPlan {
-  id: string;
-  title: string;
-  scheduledDate: string;
-  scheduledTime: string;
-  vesselName: string;
-  portId: string;
-  portName: string;
-  assignedAlertIds: string[];
-  assignedAlertsSummary: string;
-  totalDistanceKm: number;
-  totalDistanceNm: number;
-  totalDurationFormatted: string;
-  totalMassKm2: number;
-  weatherStatus: string;
-  createdAt: string;
-  status: 'Programada' | 'En curso' | 'Completada';
-}
-
 export interface AlertMass {
   id: string;
   cell_count: number;

@@ -7,7 +7,6 @@ import { LeftSidebar } from './components/LeftSidebar';
 import { BottomTelemetryBar } from './components/BottomTelemetryBar';
 import { InfoModal } from './components/InfoModal';
 import { MapLegend } from './components/MapLegend';
-import { PlanningModule } from './components/PlanningModule';
 import { CURRENT_MARITIME_WEATHER as LOCAL_WEATHER } from './data/sargassumData';
 import { calculateBearing, interpolatePosition } from './utils/geo';
 import { fmtUtc } from './utils/density';
@@ -19,7 +18,6 @@ import {
   DashboardLayers,
   FrameCollection,
   MaritimeWeather,
-  MissionPlan,
   SargassumManifest,
 } from './types';
 import {
@@ -32,8 +30,6 @@ import {
   fetchFrame,
   fetchManifest,
 } from './services/api';
-
-const STORAGE_KEY_PLANS = 'radar_caribe_saved_mission_plans_v2';
 
 export const App: React.FC = () => {
   // Backend data
@@ -71,16 +67,7 @@ export const App: React.FC = () => {
   // UI
   const [isLeftOpen, setIsLeftOpen] = useState<boolean>(true);
   const [isInfoModalOpen, setIsInfoModalOpen] = useState<boolean>(false);
-  const [activeTab, setActiveTab] = useState<'operativo' | 'planificacion'>('operativo');
 
-  const [savedPlans, setSavedPlans] = useState<MissionPlan[]>(() => {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY_PLANS);
-      return stored ? JSON.parse(stored) : [];
-    } catch {
-      return [];
-    }
-  });
 
   // Simulation
   const [isSimulating, setIsSimulating] = useState<boolean>(false);
@@ -201,25 +188,6 @@ export const App: React.FC = () => {
   const handleNotificationClick = (notif: AppNotification) => handleSelectAlert(notif.id);
   const handleMarkAllNotificationsRead = () => setReadIds(alerts.map((a) => a.id));
 
-  const persistPlans = (updated: MissionPlan[]) => {
-    try {
-      localStorage.setItem(STORAGE_KEY_PLANS, JSON.stringify(updated));
-    } catch (e) {
-      console.error(e);
-    }
-    return updated;
-  };
-  const handleSavePlan = (newPlan: MissionPlan) => setSavedPlans((prev) => persistPlans([newPlan, ...prev]));
-  const handleDeletePlan = (planId: string) =>
-    setSavedPlans((prev) => persistPlans(prev.filter((p) => p.id !== planId)));
-
-  const handleLoadPlanToMap = (plan: MissionPlan) => {
-    const first = plan.assignedAlertIds.find((id) => alerts.some((a) => a.id === id));
-    if (first) handleSelectAlert(first);
-    if (plan.portId) setSelectedPortId(plan.portId);
-    setActiveTab('operativo');
-  };
-
   const selectedAlert = alerts.find((a) => a.id === selectedAlertId) ?? null;
   const selectedDetail = selectedAlertId ? details[selectedAlertId] ?? null : null;
   const selectedRoute = selectedDetail?.routes[selectedPortId] ?? null;
@@ -338,8 +306,6 @@ export const App: React.FC = () => {
     <div className="relative h-screen w-screen overflow-hidden bg-[#07151D] font-sans text-slate-100">
       <Navbar
         weather={weather}
-        activeTab={activeTab}
-        onSelectTab={setActiveTab}
         backendConnected={backendConnected}
         onRefreshBackend={syncWithBackend}
         notifications={notifications}
@@ -434,26 +400,6 @@ export const App: React.FC = () => {
 
         <BottomTelemetryBar weather={weather} />
         <MapLegend manifest={manifest} alertSelected={!!selectedAlert} />
-
-        {activeTab === 'planificacion' && (
-          <PlanningModule
-            isOpen={true}
-            onClose={() => setActiveTab('operativo')}
-            activeTab="planificacion"
-            onSelectTab={(tab) => {
-              if (tab === 'operativo' || tab === 'planificacion') setActiveTab(tab);
-            }}
-            ports={ports}
-            alerts={alerts}
-            details={details}
-            onNeedDetail={ensureDetail}
-            weather={weather}
-            savedPlans={savedPlans}
-            onSavePlan={handleSavePlan}
-            onDeletePlan={handleDeletePlan}
-            onLoadPlanToMap={handleLoadPlanToMap}
-          />
-        )}
 
         <InfoModal isOpen={isInfoModalOpen} onClose={() => setIsInfoModalOpen(false)} />
       </main>
