@@ -46,7 +46,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         initial={{ opacity: 0, y: -10, scale: 0.98 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.3, ease: 'easeOut' }}
-        className="pointer-events-auto rounded-2xl bg-[#06292D]/85 backdrop-blur-md border border-teal-400/20 shadow-[0_10px_35px_rgba(0,0,0,0.5)] px-4 md:px-6 py-2.5 flex items-center justify-between text-[#F0FDF4] font-sans"
+        className="pointer-events-auto rounded-2xl bg-gradient-to-r from-[#DCE5D3] to-[#CFDCC6] border border-[#9DB293] shadow-[0_10px_35px_rgba(0,0,0,0.35)] px-4 md:px-6 py-2 flex items-center justify-between text-[#0F2E27] font-sans"
       >
         {/* Left: Branding - Logo + Montserrat Heading (Click to return to map) */}
         <motion.div 
@@ -59,14 +59,14 @@ export const Navbar: React.FC<NavbarProps> = ({
           <img 
             src="/Radar Caribe.png" 
             alt="Radar Caribe" 
-            className="h-11 md:h-12 w-auto object-contain rounded-xl bg-white/90 p-1 ring-2 ring-teal-300/70 shadow-[0_0_14px_rgba(45,212,191,0.45)] transition-transform duration-300"
+            className="h-14 md:h-16 w-auto object-contain drop-shadow-[0_3px_6px_rgba(15,46,39,0.35)] transition-transform duration-300"
           />
 
-          <div className="border-l border-teal-400/25 pl-3 flex flex-col justify-center">
-            <h1 className="text-base md:text-lg font-montserrat font-extrabold tracking-tight text-[#F0FDF4] leading-tight">
+          <div className="border-l border-[#0F2E27]/25 pl-3 flex flex-col justify-center">
+            <h1 className="text-lg md:text-xl font-display font-extrabold tracking-tight text-[#0F2E27] leading-tight">
               Radar Caribe
             </h1>
-            <p className="text-[10px] md:text-[11px] text-[#CCFBF1]/90 font-bold tracking-normal font-montserrat mt-0.5">
+            <p className="text-[10px] md:text-[11px] text-[#2F5A4C] font-bold tracking-normal font-display mt-0.5">
               Radar de Sargazo en el Caribe
             </p>
           </div>
@@ -79,13 +79,13 @@ export const Navbar: React.FC<NavbarProps> = ({
             whileHover={{ scale: 1.03 }}
             whileTap={{ scale: 0.97 }}
             onClick={() => onSelectTab && onSelectTab('planificacion')}
-            className={`flex items-center space-x-2 px-3.5 py-1.5 rounded-xl transition-all font-montserrat font-bold cursor-pointer border ${
+            className={`focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0F4C42] focus-visible:ring-offset-1 focus-visible:ring-offset-[#DCE5D3] flex items-center space-x-2 px-3.5 py-1.5 rounded-xl transition-all font-montserrat font-bold cursor-pointer border ${
               activeTab === 'planificacion'
-                ? 'bg-teal-500 text-slate-950 border-teal-300 shadow-[0_0_15px_rgba(45,212,191,0.4)]'
-                : 'bg-teal-500/20 text-[#CCFBF1] border-teal-400/30 hover:bg-teal-500/30 hover:text-white'
+                ? 'bg-[#0F4C42] text-white border-[#0F4C42] shadow-md'
+                : 'bg-white/50 text-[#0F2E27] border-[#0F4C42]/40 hover:bg-white/80 hover:border-[#0F4C42]'
             }`}
           >
-            <CalendarCheck size={16} weight="duotone" className={activeTab === 'planificacion' ? 'text-slate-950' : 'text-[#2DD4BF]'} />
+            <CalendarCheck size={16} weight="duotone" className={activeTab === 'planificacion' ? 'text-white' : 'text-[#0F4C42]'} />
             <span>Planificación</span>
           </motion.button>
 
@@ -98,12 +98,12 @@ export const Navbar: React.FC<NavbarProps> = ({
                 setShowRegionMenu(!showRegionMenu);
                 setShowNotifMenu(false);
               }}
-              className="flex items-center space-x-1.5 bg-[#06292D]/90 hover:bg-[#08383D] border border-teal-400/25 px-3 py-1.5 rounded-xl text-[#F0FDF4] text-xs font-bold font-montserrat transition-all shadow-sm cursor-pointer"
+              className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0F4C42] flex items-center space-x-1.5 bg-white/50 hover:bg-white/80 border border-[#0F4C42]/40 px-3 py-1.5 rounded-xl text-[#0F2E27] text-xs font-bold font-montserrat transition-all shadow-sm cursor-pointer"
             >
-              <MapPin size={15} weight="bold" className="text-[#2DD4BF]" />
+              <MapPin size={15} weight="bold" className="text-[#0F4C42]" />
               <span className="hidden sm:inline">{selectedRegion.split(' (')[0]}</span>
               <span className="sm:hidden">Caribe</span>
-              <CaretDown size={12} weight="bold" className="text-teal-300" />
+              <CaretDown size={12} weight="bold" className="text-[#0F4C42]" />
             </motion.button>
 
             <AnimatePresence>
@@ -144,13 +144,13 @@ export const Navbar: React.FC<NavbarProps> = ({
                 setShowNotifMenu(!showNotifMenu);
                 setShowRegionMenu(false);
               }}
-              className="relative p-2 rounded-xl bg-teal-500/20 text-[#CCFBF1] hover:bg-teal-500/30 hover:text-white border border-teal-400/30 transition-all cursor-pointer flex items-center justify-center"
+              className="focus:outline-none focus-visible:ring-2 focus-visible:ring-[#0F4C42] relative p-2 rounded-xl bg-white/50 text-[#0F2E27] hover:bg-white/80 border border-[#0F4C42]/40 transition-all cursor-pointer flex items-center justify-center"
               title="Centro de Alertas y Predicciones"
             >
               <Bell
                 size={17}
                 weight={unreadCount > 0 ? 'duotone' : 'bold'}
-                className={unreadCount > 0 ? 'text-amber-400' : 'text-[#2DD4BF]'}
+                className={unreadCount > 0 ? 'text-amber-700' : 'text-[#0F4C42]'}
               />
               {unreadCount > 0 && (
                 <span className="absolute -top-1 -right-1 bg-amber-400 text-[#06292D] text-[10px] font-extrabold w-4 h-4 rounded-full flex items-center justify-center font-montserrat shadow-md animate-pulse">

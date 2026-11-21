@@ -33,7 +33,8 @@ export default {
         'floating': '0 12px 40px rgba(0, 0, 0, 0.55)',
       },
       fontFamily: {
-        montserrat: ['Montserrat', 'sans-serif'],
+        montserrat: ['"Bricolage Grotesque"', 'Montserrat', 'sans-serif'],
+        display: ['"Bricolage Grotesque"', 'Montserrat', 'sans-serif'],
         sans: ['Inter', 'system-ui', '-apple-system', 'BlinkMacSystemFont', 'Segoe UI', 'Roboto', 'sans-serif'],
         mono: ['JetBrains Mono', 'monospace'],
       }
