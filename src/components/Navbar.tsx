@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { motion, AnimatePresence } from 'motion/react';
+import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
 import { 
   CalendarCheck, 
   MapPin, 
@@ -28,6 +28,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   onNotificationClick,
   onMarkAllNotificationsRead,
 }) => {
+  const reduceMotion = useReducedMotion();
   const [selectedRegion, setSelectedRegion] = useState('Caribe mexicano');
   const [showRegionMenu, setShowRegionMenu] = useState(false);
   const [showNotifMenu, setShowNotifMenu] = useState(false);
@@ -43,11 +44,22 @@ export const Navbar: React.FC<NavbarProps> = ({
   return (
     <div className="absolute top-4 left-4 right-4 md:top-5 md:left-6 md:right-6 z-50 pointer-events-none select-none">
       <motion.header
-        initial={{ opacity: 0, y: -10, scale: 0.98 }}
-        animate={{ opacity: 1, y: 0, scale: 1 }}
-        transition={{ duration: 0.3, ease: 'easeOut' }}
-        className="pointer-events-auto rounded-2xl bg-gradient-to-r from-[#DCE5D3] to-[#CFDCC6] border border-[#9DB293] shadow-[0_10px_35px_rgba(0,0,0,0.35)] px-4 md:px-6 py-2 flex items-center justify-between text-[#0F2E27] font-sans"
+        initial={reduceMotion ? false : { opacity: 0, y: -14 }}
+        animate={{ opacity: 1, y: 0 }}
+        whileHover="hover"
+        transition={{ duration: 0.45, ease: 'easeOut' }}
+        className="pointer-events-auto relative rounded-2xl bg-gradient-to-r from-[#DCE5D3]/35 to-[#CFDCC6]/30 hover:from-[#DCE5D3]/45 hover:to-[#CFDCC6]/40 backdrop-blur-xl backdrop-saturate-150 backdrop-brightness-125 border border-white/40 shadow-[0_10px_35px_rgba(0,0,0,0.25),inset_0_1px_0_rgba(255,255,255,0.55),inset_0_-1px_0_rgba(255,255,255,0.15)] transition-colors duration-300 px-4 md:px-6 py-2 flex items-center justify-between text-[#0B2620] font-sans [text-shadow:0_1px_2px_rgba(255,255,255,0.55)]"
       >
+        {!reduceMotion && (
+          <div className="absolute inset-0 rounded-2xl overflow-hidden pointer-events-none">
+            <motion.div
+              variants={{ hover: { x: '260%' } }}
+              initial={{ x: '-60%' }}
+              transition={{ duration: 0.9, ease: 'easeInOut' }}
+              className="absolute inset-y-0 w-1/4 -skew-x-12 bg-gradient-to-r from-transparent via-white/30 to-transparent"
+            />
+          </div>
+        )}
         {/* Left: Branding - Logo + Montserrat Heading (Click to return to map) */}
         <motion.div 
           whileHover={{ scale: 1.02 }}
