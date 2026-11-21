@@ -1,7 +1,3 @@
-export type Priority = 'Baja' | 'Media' | 'Alta';
-
-export type DetectionSource = 'Sentinel-2 ESA' | 'SIMAR-CONABIO' | 'Avistamiento Costero';
-
 export interface BasePort {
   id: string;
   name: string;
@@ -11,26 +7,6 @@ export interface BasePort {
   lng: number;
   description: string;
   facilities: string;
-}
-
-export interface SargassumDetection {
-  id: string;
-  codeName: string; // e.g. "Masa estimada A"
-  zoneName: string;
-  lat: number;
-  lng: number;
-  detectionDate: string;
-  source: DetectionSource;
-  massTons: number;
-  priority: Priority;
-  confidencePercent: number; // e.g. 87%
-  areaKm2: number;
-  estimatedDepthM: number;
-  distanceToCoastKm: number;
-  avgDailyAccumulationTons?: number;
-  nearestVessel?: string;
-  vesselDistanceKm?: number;
-  vesselEtaMinutes?: number;
 }
 
 export interface MaritimeWeather {
@@ -62,83 +38,6 @@ export interface DashboardLayers {
   coordinates: boolean;
 }
 
-export interface RouteStop {
-  id: string;
-  name: string;
-  codeName?: string;
-  lat: number;
-  lng: number;
-  isPort: boolean;
-  massTons?: number;
-  priority?: Priority;
-  confidencePercent?: number;
-  legDistKm: number;
-  legDistNm: number;
-  cumulativeDistKm: number;
-  cumulativeDistNm: number;
-  legEtaMinutes: number;
-}
-
-export interface OptimizationMetrics {
-  initialSequence: RouteStop[];
-  optimizedSequence: RouteStop[];
-  initialDistanceKm: number;
-  initialDistanceNm: number;
-  optimizedDistanceKm: number;
-  optimizedDistanceNm: number;
-  distanceReductionKm: number;
-  distanceReductionNm: number;
-  percentageReduction: number;
-  etaHours: number;
-  etaMinutes: number;
-  etaTotalFormatted: string; // e.g. "1 h 45 m"
-  fuelEstimatedLiters: number;
-  fuelSavedLiters: number;
-  totalMassTons: number;
-  vesselSpeedKnots: number;
-  backendRoute?: BackendRouteResponse;
-  isBackendRoute?: boolean;
-}
-
-export interface BackendRouteLeg {
-  from_index: number;
-  to_index: number;
-  from_name?: string;
-  to_name?: string;
-  distance_km: number;
-  time_minutes: number;
-  coordinates: [number, number][]; // [lon, lat]
-  snap_warnings: string[];
-}
-
-export interface BackendRouteMeta {
-  distance_km: number;
-  time_minutes: number;
-  data_source: string;
-  selected_time: string;
-  snap_warnings: string[];
-  disclaimer: string;
-  legs_count?: number;
-}
-
-export interface BackendRouteResponse {
-  route: {
-    type: string;
-    coordinates: [number, number][]; // [lon, lat]
-  };
-  legs?: BackendRouteLeg[];
-  meta: BackendRouteMeta;
-}
-
-export interface CustomWaypoint {
-  id: string;
-  name: string;
-  lat: number;
-  lng: number;
-  massTons?: number;
-  createdAt?: string;
-}
-
 export interface MissionPlan {
   id: string;
   title: string;
@@ -147,92 +46,92 @@ export interface MissionPlan {
   vesselName: string;
   portId: string;
   portName: string;
-  assignedPointIds: string[];
-  assignedPointsSummary: string;
+  assignedAlertIds: string[];
+  assignedAlertsSummary: string;
   totalDistanceKm: number;
   totalDistanceNm: number;
   totalDurationFormatted: string;
-  totalMassTons: number;
+  totalMassKm2: number;
   weatherStatus: string;
   createdAt: string;
   status: 'Programada' | 'En curso' | 'Completada';
 }
 
-export interface SargassumGeoJsonCellProperties {
-  cell_i: number;
-  cell_j: number;
-  presence_probability: number;
-  horizon_hours: number;
-  prediction_datetime: string;
+export interface AlertMass {
+  id: string;
+  cell_count: number;
+  area_km2: number;
+  density_sum: number;
+  centroid: { lat: number; lon: number };
+  bbox: [number, number, number, number]; // [west, south, east, north]
+  geometry: GeoJSON.Polygon | GeoJSON.MultiPolygon;
 }
 
-export interface SargassumGeoJsonFeature {
-  type: 'Feature';
-  id?: string | number;
-  properties: SargassumGeoJsonCellProperties;
-  geometry: {
-    type: 'Polygon';
-    coordinates: number[][][]; // [lon, lat][]
-  };
+export interface AlertSummary {
+  id: string;
+  title: string;
+  message: string;
+  prediction_utc: string;
+  frame_minutes: number;
+  area_id: string;
+  mass: AlertMass;
+  intersection: { cell_count: number; density_sum: number };
+  destination: { lat: number; lon: number };
+  recommended_port_id: string;
+  route_count: number;
 }
 
-export interface SargassumGeoJsonMetadata {
-  run_type?: string;
-  note?: string;
-  t0?: string;
-  horizon_hours?: number;
-  grid_resolution_km?: number;
-  min_probability_exported?: number;
-  semantics?: string;
+export interface AlertsResponse {
+  run_id: string;
+  t0: string;
+  generated_utc: string;
+  collection_area_ids: string[];
+  alerts: AlertSummary[];
 }
 
-export interface SargassumGeoJsonCollection {
-  type: 'FeatureCollection';
-  metadata?: SargassumGeoJsonMetadata;
-  features: SargassumGeoJsonFeature[];
+export interface RouteMeta {
+  distance_km: number;
+  time_minutes: number;
+  data_source?: string;
+  selected_time?: string;
+  snap_warnings?: string[];
+  disclaimer?: string;
+  smoothing?: { applied: boolean; method: string; raw_points: number; simplified_points: number };
 }
 
-export interface SelectedGeoJsonCell {
-  id: string; // `cell-${cell_i}-${cell_j}`
-  cell_i: number;
-  cell_j: number;
-  presence_probability: number;
-  prediction_datetime: string;
-  centroidLat: number;
-  centroidLng: number;
-  priority: Priority;
-  confidencePercent: number;
-  feature: SargassumGeoJsonFeature;
+export interface AlertRoute {
+  status: 'ok' | 'error';
+  route?: { type: 'LineString'; coordinates: [number, number][] }; // [lon, lat]
+  meta?: RouteMeta;
+  error?: string | null;
 }
 
-export interface SargassumCluster {
-  id: string; // `cluster-${clusterId}`
-  name: string;
-  clusterId: number;
-  cellCount: number;
-  maxProb: number;
-  avgProb: number;
-  centroidLat: number;
-  centroidLng: number;
-  estimatedMassTons: number;
-  datetime: string;
-  features: SargassumGeoJsonFeature[];
+export interface AlertDetail extends AlertSummary {
+  routes: Record<string, AlertRoute>;
 }
+
+export interface PaletteStop {
+  stop: number;
+  color: string;
+}
+
+export interface SargassumManifest {
+  run_id: string;
+  t0: string;
+  step_minutes: number;
+  bbox: [number, number, number, number];
+  vmin: number;
+  vmax: number;
+  palette: PaletteStop[];
+  frames: { minutes: number; valid_utc: string }[];
+}
+
+export type FrameCollection = GeoJSON.FeatureCollection<GeoJSON.Polygon, { density: number }>;
 
 export interface AppNotification {
-  id: string;
+  id: string; // alert id
   title: string;
   message: string;
   timestamp: string;
   read: boolean;
-  type: 'sargassum_alert' | 'route_update' | 'weather_alert';
-  locationName?: string;
-  lat?: number;
-  lng?: number;
-  massTons?: number;
-  probPercent?: number;
 }
-
-
-
-

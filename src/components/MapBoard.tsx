@@ -1,68 +1,37 @@
-import React, { useEffect, useMemo, useRef } from 'react';
-import { 
-  MapContainer, 
-  TileLayer, 
-  Polyline, 
-  Circle, 
-  Marker, 
-  Popup, 
-  Tooltip,
-  GeoJSON,
-  useMap,
-  useMapEvents 
-} from 'react-leaflet';
+import React, { useEffect, useRef } from 'react';
+import { MapContainer, TileLayer, Polyline, Marker, Popup, Tooltip, GeoJSON, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import { motion } from 'motion/react';
-import { 
-  BasePort, 
-  CustomWaypoint, 
-  DashboardLayers, 
-  OptimizationMetrics, 
-  SargassumDetection,
-  SargassumGeoJsonCollection,
-  SargassumCluster
-} from '../types';
+import { BasePort, DashboardLayers, FrameCollection, SargassumManifest } from '../types';
+import { densityColor } from '../utils/density';
 import { Boat3DMarker } from './Boat3DMarker';
-import { Plus, Minus, NavigationArrow, MapTrifold, Trash, Crosshair, Flame, MapPin } from '@phosphor-icons/react';
+import { Plus, Minus, NavigationArrow, MapTrifold, Crosshair } from '@phosphor-icons/react';
+
+type Bounds = [[number, number], [number, number]]; // [[south, west], [north, east]]
 
 interface MapBoardProps {
   ports: BasePort[];
   selectedPortId: string;
   onSelectPort: (portId: string) => void;
-  detections: SargassumDetection[];
-  selectedDetectionIds: string[];
-  onToggleDetection: (detectionId: string) => void;
-  customWaypoints: CustomWaypoint[];
-  onAddCustomWaypoint: (lat: number, lng: number) => void;
-  onRemoveCustomWaypoint: (id: string) => void;
   layers: DashboardLayers;
-  metrics: OptimizationMetrics | null;
-  suggestedRouteCoordinates?: [number, number][];
-  // GeoJSON & Clusters
-  geoJsonData?: SargassumGeoJsonCollection | null;
-  sargassumClusters: SargassumCluster[];
-  selectedClusterIds: string[];
-  onToggleCluster: (clusterId: string) => void;
-  // Manual Waypoint Mode
-  isAddPointActive: boolean;
-  onCancelAddPointActive?: () => void;
-  // Simulation Props
+  routeCoordinates: [number, number][];
+  frame: FrameCollection | null;
+  manifest: SargassumManifest | null;
+  highlightGeometry: GeoJSON.Polygon | GeoJSON.MultiPolygon | null;
+  highlightId: string | null;
+  focusBounds: Bounds | null;
   isSimulating: boolean;
   vesselPosition: [number, number] | null;
   vesselBearing: number;
-  currentLegIndex: number;
   onCycleBasemapMode: () => void;
-  focusLocation?: [number, number] | null;
 }
 
-// Controller to smoothly fly to focused notification coordinates
-const MapFocusController: React.FC<{ focusLocation?: [number, number] | null }> = ({ focusLocation }) => {
+// Flies to the bounds each time a new bounds object is passed
+const MapFocusController: React.FC<{ bounds: Bounds | null }> = ({ bounds }) => {
   const map = useMap();
   useEffect(() => {
-    if (focusLocation) {
-      map.flyTo(focusLocation, 12, { duration: 1.5 });
-    }
-  }, [focusLocation, map]);
+    if (bounds) map.flyToBounds(bounds, { duration: 1.2, padding: [80, 80], maxZoom: 12 });
+  }, [bounds, map]);
   return null;
 };
 
@@ -76,69 +45,31 @@ const MapInstanceCapture: React.FC<{ onMapReady: (map: L.Map) => void }> = ({ on
   return null;
 };
 
-// Map click handler to drop custom points ONLY when isAddPointActive is true
-const MapClickHandler: React.FC<{ 
-  isAddPointActive: boolean;
-  onMapClick?: (lat: number, lng: number) => void;
-}> = ({ isAddPointActive, onMapClick }) => {
-  useMapEvents({
-    click: (e) => {
-      if (isAddPointActive && onMapClick) {
-        onMapClick(e.latlng.lat, e.latlng.lng);
-      }
-    },
-  });
-  return null;
-};
-
-// Heatmap fill color helper matching prompt requirements
-const getCellFillColor = (p: number): string => {
-  if (p > 0.75) return '#bd0026'; // Rojo intenso — Alta probabilidad
-  if (p > 0.50) return '#f03b20'; // Rojo-naranja
-  if (p > 0.25) return '#fd8d3c'; // Naranja
-  if (p > 0.10) return '#fecc5c'; // Amarillo-naranja
-  return '#ffffb2';                // Amarillo claro (<= 0.10)
-};
-
-// Heatmap fill opacity helper (suave y difuminado entre 0.18 y 0.55 sin bordes)
-const getCellFillOpacity = (p: number): number => {
-  return Math.min(0.55, Math.max(0.18, 0.18 + p * 0.37));
-};
-
 export const MapBoard: React.FC<MapBoardProps> = ({
   ports,
   selectedPortId,
   onSelectPort,
-  detections,
-  selectedDetectionIds,
-  onToggleDetection,
-  customWaypoints,
-  onAddCustomWaypoint,
-  onRemoveCustomWaypoint,
   layers,
-  metrics,
-  suggestedRouteCoordinates = [],
-  geoJsonData = null,
-  sargassumClusters,
-  selectedClusterIds,
-  onToggleCluster,
-  isAddPointActive,
-  onCancelAddPointActive,
+  routeCoordinates,
+  frame,
+  manifest,
+  highlightGeometry,
+  highlightId,
+  focusBounds,
   isSimulating,
   vesselPosition,
   vesselBearing,
-  currentLegIndex,
   onCycleBasemapMode,
-  focusLocation = null,
 }) => {
-  // Center map comfortably to cover both ports and the GeoJSON probability filament
-  const mapCenter: [number, number] = [19.95, -86.0];
+  const mapCenter: [number, number] = [20.9, -86.7];
   const mapRef = useRef<L.Map | null>(null);
 
-  // Helper to focus sargassum filament
   const handleFocusSargassum = () => {
-    if (mapRef.current) {
-      mapRef.current.flyTo([19.45, -85.25], 9, { duration: 1.2 });
+    if (!mapRef.current) return;
+    if (focusBounds) mapRef.current.flyToBounds(focusBounds, { duration: 1.2, padding: [80, 80], maxZoom: 12 });
+    else if (manifest) {
+      const [w, s, e, n] = manifest.bbox;
+      mapRef.current.flyToBounds([[s, w], [n, e]], { duration: 1.2 });
     }
   };
 
@@ -219,174 +150,8 @@ export const MapBoard: React.FC<MapBoardProps> = ({
     });
   };
 
-  // Helper: Consolidated Sargassum Cluster Representative Centroid Pin Marker
-  const createClusterCentroidIcon = (_cluster: SargassumCluster, seqNumber: number) => {
-    return L.divIcon({
-      className: 'custom-cluster-centroid-pin',
-      html: `
-        <div style="cursor: pointer; transform: translate(-17px, -17px);" onclick="event.stopPropagation()">
-          <div style="
-            width: 34px;
-            height: 34px;
-            background: #06292D;
-            border: 2.5px solid #14B8A6;
-            border-radius: 9999px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 0 20px rgba(20, 184, 166, 0.95);
-          ">
-            <span style="background: #2DD4BF; color: #07151D; font-weight: 900; font-size: 11px; width: 20px; height: 20px; border-radius: 9999px; display: inline-flex; align-items: center; justify-content: center; box-shadow: 0 0 8px #2DD4BF;">
-              ${seqNumber}
-            </span>
-          </div>
-        </div>
-      `,
-      iconSize: [34, 34],
-      iconAnchor: [17, 17],
-    });
-  };
-
-  // Helper: Selected Sargassum Target Badge
-  const createSelectedDetectionIcon = (detection: SargassumDetection, seqNumber?: number) => {
-    const seqBadge = seqNumber
-      ? `<span style="background: #2DD4BF; color: #07151D; font-weight: 900; font-size: 10.5px; width: 19px; height: 19px; border-radius: 9999px; display: inline-flex; align-items: center; justify-content: center; margin-right: 6px; box-shadow: 0 0 8px #2DD4BF;">${seqNumber}</span>`
-      : '';
-
-    return L.divIcon({
-      className: 'custom-selected-detection',
-      html: `
-        <div style="
-          background: rgba(6, 41, 45, 0.94);
-          backdrop-filter: blur(20px);
-          border: 1.5px solid #2DD4BF;
-          box-shadow: 0 10px 30px rgba(0, 0, 0, 0.65), 0 0 16px rgba(45, 212, 191, 0.35);
-          padding: 7px 14px;
-          border-radius: 14px;
-          white-space: nowrap;
-          cursor: pointer;
-          transform: translate(24px, -24px);
-        " onclick="event.stopPropagation()">
-          <div style="display: flex; align-items: center; justify-content: space-between; gap: 8px;">
-            <div style="display: flex; align-items: center;">
-              ${seqBadge}
-              <span style="font-size: 12px; font-weight: 800; color: #FFFFFF; font-family: Montserrat, sans-serif;">
-                ${detection.codeName} – ${detection.massTons.toLocaleString()} t
-              </span>
-            </div>
-            <span style="font-size: 9px; font-weight: 800; background: #0D9488; color: white; padding: 1px 6px; border-radius: 9999px;">ACTIVO</span>
-          </div>
-          <div style="font-size: 10px; color: #99F6E4; font-weight: 500; font-family: Inter, sans-serif; margin-top: 1px;">
-            Confianza: <strong style="color: #2DD4BF;">${detection.confidencePercent}%</strong>
-          </div>
-        </div>
-      `,
-      iconSize: [230, 52],
-      iconAnchor: [0, 26],
-    });
-  };
-
-  // Helper: Unselected Minor Sargassum Target
-  const createMinorDetectionIcon = (detection: SargassumDetection) => {
-    return L.divIcon({
-      className: 'custom-minor-detection',
-      html: `
-        <div style="
-          width: 14px;
-          height: 14px;
-          background: #F97316;
-          border: 2px solid #FFFFFF;
-          border-radius: 9999px;
-          box-shadow: 0 0 10px rgba(249, 115, 22, 0.85);
-          cursor: pointer;
-        " title="${detection.codeName} (${detection.massTons}t) - Clic para agregar a la ruta" onclick="event.stopPropagation()"></div>
-      `,
-      iconSize: [14, 14],
-      iconAnchor: [7, 7],
-    });
-  };
-
-  // Helper: Custom Waypoint Icon (Added on map click)
-  const createCustomWaypointIcon = (wp: CustomWaypoint, index: number) => {
-    return L.divIcon({
-      className: 'custom-waypoint-marker',
-      html: `
-        <div style="position: relative; display: flex; align-items: center; justify-content: center; cursor: pointer; transform: translate(-15px, -15px);" onclick="event.stopPropagation()">
-          <div style="
-            width: 30px;
-            height: 30px;
-            background: #06292D;
-            border: 2px solid #38BDF8;
-            border-radius: 9999px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 0 14px rgba(56, 189, 248, 0.7);
-          ">
-            <span style="font-size: 10px; font-weight: 900; color: #38BDF8; font-family: Montserrat, sans-serif;">P${index}</span>
-          </div>
-          <div style="
-            position: absolute;
-            top: -20px;
-            background: rgba(6, 41, 45, 0.92);
-            border: 1px solid #38BDF8;
-            color: #E0F2FE;
-            font-size: 9.5px;
-            font-weight: bold;
-            font-family: Montserrat, sans-serif;
-            padding: 1px 6px;
-            border-radius: 6px;
-            white-space: nowrap;
-          ">
-            ${wp.name}
-          </div>
-        </div>
-      `,
-      iconSize: [30, 30],
-      iconAnchor: [15, 15],
-    });
-  };
-
-  // Coordenadas resueltas para Ruta Sugerida (100% Óptima)
-  const resolvedSuggestedCoords: [number, number][] = useMemo(() => {
-    if (suggestedRouteCoordinates && suggestedRouteCoordinates.length > 0) {
-      return suggestedRouteCoordinates;
-    }
-    if (!metrics || !layers.optimalRoutes) return [];
-    if (metrics.backendRoute && metrics.backendRoute.route?.coordinates?.length) {
-      return metrics.backendRoute.route.coordinates.map(
-        ([lon, lat]) => [lat, lon] as [number, number]
-      );
-    }
-    return metrics.optimizedSequence.map((stop) => [stop.lat, stop.lng] as [number, number]);
-  }, [suggestedRouteCoordinates, metrics, layers.optimalRoutes]);
-
   return (
-    <div className={`relative w-full h-full overflow-hidden bg-[#07151D] ${isAddPointActive ? 'cursor-crosshair' : ''}`}>
-      {/* Banner flotante discreto si el modo de marcado de punto está activo */}
-      {isAddPointActive && (
-        <div className="absolute top-[88px] left-1/2 -translate-x-1/2 z-40 pointer-events-auto select-none">
-          <motion.div 
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="bg-[#06292D]/90 backdrop-blur-md border border-amber-400/50 px-4 py-1.5 rounded-full shadow-[0_0_20px_rgba(251,191,36,0.3)] flex items-center space-x-2.5 text-xs font-sans text-amber-200"
-          >
-            <span className="w-2.5 h-2.5 rounded-full bg-amber-400 animate-ping" />
-            <span className="font-bold font-montserrat">Modo fijar punto activo:</span>
-            <span className="text-white">Haz clic sobre el mar para ubicar coordenada</span>
-            {onCancelAddPointActive && (
-              <button 
-                type="button" 
-                onClick={onCancelAddPointActive}
-                className="ml-2 text-[10px] font-bold text-amber-300 hover:text-white underline cursor-pointer"
-              >
-                Cancelar
-              </button>
-            )}
-          </motion.div>
-        </div>
-      )}
-
+    <div className="relative w-full h-full overflow-hidden bg-[#07151D]">
       {/* Map Container - Full Bleed Satellite View */}
       <MapContainer
         center={mapCenter}
@@ -394,12 +159,12 @@ export const MapBoard: React.FC<MapBoardProps> = ({
         minZoom={7}
         maxZoom={16}
         scrollWheelZoom={true}
+        preferCanvas
         zoomControl={false}
         className="w-full h-full"
       >
         <MapInstanceCapture onMapReady={(m) => { mapRef.current = m; }} />
-        <MapFocusController focusLocation={focusLocation} />
-        <MapClickHandler isAddPointActive={isAddPointActive} onMapClick={onAddCustomWaypoint} />
+        <MapFocusController bounds={focusBounds} />
 
         {/* 100% RELIABLE HIGH-CONTRAST BASEMAPS */}
         {layers.basemapMode === 'ocean' && (
@@ -440,240 +205,36 @@ export const MapBoard: React.FC<MapBoardProps> = ({
           />
         )}
 
-        {/* 1. GEOJSON HEATMAP POLYGONS (Capa visual continua de calor suave sin bordes) */}
-        {layers.sargassumPrediction && geoJsonData && (
+        {/* PREDICCIÓN: celdas de densidad del frame seleccionado (escala log del manifest) */}
+        {layers.sargassumPrediction && frame && manifest && (
           <GeoJSON
-            key={`geojson-prob-visual-${geoJsonData.features.length}`}
-            data={geoJsonData as any}
-            style={(feature) => {
-              if (!feature || !feature.properties) return {};
-              const p = (feature.properties as any).presence_probability || 0;
-              return {
-                fillColor: getCellFillColor(p),
-                fillOpacity: getCellFillOpacity(p),
-                weight: 0,
-                stroke: false,
-              };
-            }}
-            onEachFeature={(_feature, layer) => {
-              // Clic en cualquier celda añade/quita el filamento consolidado
-              layer.on('click', (e) => {
-                L.DomEvent.stopPropagation(e as any);
-                if (sargassumClusters.length > 0) {
-                  onToggleCluster(sargassumClusters[0].id);
-                }
-              });
-            }}
+            key={`frame-${manifest.run_id}-${frame.features.length}-${frame.features[0]?.properties.density}`}
+            data={frame}
+            interactive={false}
+            style={(f) => ({
+              fillColor: densityColor(f?.properties?.density ?? 0, manifest.vmin, manifest.vmax, manifest.palette),
+              fillOpacity: 0.6,
+              stroke: false,
+            })}
           />
         )}
 
-        {/* 2. CONSOLIDATED SARGASSUM CLUSTER CENTROID PINS (UN SOLO PUNTO POR MANCHA) */}
-        {layers.sargassumPrediction && sargassumClusters.map((cluster) => {
-          const isSelected = selectedClusterIds.includes(cluster.id);
-          if (!isSelected) return null;
-
-          const seqIndex = metrics?.optimizedSequence.findIndex((s) => s.id === cluster.id);
-          const seqNumber = seqIndex !== undefined && seqIndex > -1 ? seqIndex : 1;
-
-          return (
-            <Marker
-              key={cluster.id}
-              position={[cluster.centroidLat, cluster.centroidLng]}
-              icon={createClusterCentroidIcon(cluster, seqNumber)}
-              eventHandlers={{
-                click: (e) => {
-                  L.DomEvent.stopPropagation(e as any);
-                },
-              }}
-            >
-              <Popup className="custom-leaflet-popup">
-                <div 
-                  onClick={(e) => e.stopPropagation()} 
-                  className="p-3 text-xs min-w-[230px] space-y-2 font-sans"
-                >
-                  <div className="font-montserrat font-bold text-white text-sm pb-1 border-b border-teal-400/30 flex items-center justify-between">
-                    <span>{cluster.name}</span>
-                    <span className="text-[9.5px] px-2 py-0.5 rounded-full font-bold bg-teal-500/20 text-[#2DD4BF] border border-teal-400/40">
-                      {cluster.cellCount} celdas
-                    </span>
-                  </div>
-                  <div className="text-slate-200 flex justify-between">
-                    <span>Centroide Ponderado:</span>
-                    <strong className="text-white font-mono">
-                      {cluster.centroidLat.toFixed(4)}°N, {Math.abs(cluster.centroidLng).toFixed(4)}°W
-                    </strong>
-                  </div>
-                  <div className="text-slate-200 flex justify-between">
-                    <span>Concentración Máxima:</span>
-                    <strong className="text-[#2DD4BF] font-mono">
-                      {(cluster.maxProb * 100).toFixed(0)}%
-                    </strong>
-                  </div>
-                  <div className="text-slate-200 flex justify-between">
-                    <span>Masa estimada acumulada:</span>
-                    <strong className="text-white font-mono">
-                      ~{cluster.estimatedMassTons.toLocaleString()} t
-                    </strong>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onToggleCluster(cluster.id);
-                    }}
-                    className="w-full mt-2 py-1.5 px-3 rounded-xl bg-red-600/90 hover:bg-red-500 text-white font-montserrat font-bold text-xs transition-colors cursor-pointer flex items-center justify-center space-x-1.5 shadow-md"
-                  >
-                    <Trash size={13} weight="bold" />
-                    <span>Quitar mancha de la ruta</span>
-                  </button>
-                </div>
-              </Popup>
-            </Marker>
-          );
-        })}
-
-        {/* 3. SARGAZO DETECTIONS (Puntos costeros complementarios) */}
-        {layers.sargassumPrediction &&
-          detections.map((detection) => {
-            const isSelected = selectedDetectionIds.includes(detection.id);
-            const seqIndex = metrics?.optimizedSequence.findIndex((s) => s.id === detection.id);
-            const seqNumber = seqIndex !== undefined && seqIndex > -1 ? seqIndex : undefined;
-
-            return (
-              <React.Fragment key={detection.id}>
-                {isSelected && (
-                  <Circle
-                    center={[detection.lat, detection.lng]}
-                    radius={1200}
-                    pathOptions={{
-                      color: '#2DD4BF',
-                      fillColor: '#2DD4BF',
-                      fillOpacity: 0.12,
-                      weight: 1.5,
-                      dashArray: '4, 4',
-                    }}
-                  />
-                )}
-
-                <Marker
-                  position={[detection.lat, detection.lng]}
-                  icon={
-                    isSelected
-                      ? createSelectedDetectionIcon(detection, seqNumber)
-                      : createMinorDetectionIcon(detection)
-                  }
-                  eventHandlers={{
-                    click: (e) => {
-                      L.DomEvent.stopPropagation(e as any);
-                      onToggleDetection(detection.id);
-                    },
-                  }}
-                >
-                  <Popup className="custom-leaflet-popup">
-                    <div 
-                      onClick={(e) => e.stopPropagation()}
-                      className="p-3 text-xs min-w-[210px] space-y-1.5 font-sans"
-                    >
-                      <div className="font-montserrat font-bold text-white text-sm pb-1 border-b border-teal-400/20 flex items-center justify-between">
-                        <span>{detection.codeName}</span>
-                        <span
-                          className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full ${
-                            detection.priority === 'Alta'
-                              ? 'bg-red-500/80 text-white'
-                              : detection.priority === 'Media'
-                              ? 'bg-orange-500/80 text-white'
-                              : 'bg-yellow-500/80 text-slate-950'
-                          }`}
-                        >
-                          {detection.priority}
-                        </span>
-                      </div>
-                      <div className="text-slate-200 flex justify-between">
-                        <span>Masa estimada:</span>
-                        <strong className="text-white font-mono">{detection.massTons.toLocaleString()} t</strong>
-                      </div>
-                      <div className="text-slate-200 flex justify-between">
-                        <span>Distancia a costa:</span>
-                        <span className="text-slate-300 font-mono">{detection.distanceToCoastKm} km</span>
-                      </div>
-                      <div className="text-[10px] font-mono text-teal-200/70 pt-1 border-t border-teal-400/15">
-                        Coord: {detection.lat.toFixed(5)}°N, {Math.abs(detection.lng).toFixed(5)}°W
-                      </div>
-                      <div className="pt-2">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onToggleDetection(detection.id);
-                          }}
-                          className={`w-full py-1.5 px-2 rounded-xl font-montserrat font-bold text-xs transition-colors cursor-pointer ${
-                            isSelected
-                              ? 'bg-teal-600 text-white shadow-[0_0_12px_rgba(20,184,166,0.5)]'
-                              : 'bg-white/10 text-teal-300 border border-teal-400/40 hover:bg-white/20'
-                          }`}
-                        >
-                          {isSelected ? '✓ Asignada a Recolección' : '+ Seleccionar masa'}
-                        </button>
-                      </div>
-                    </div>
-                  </Popup>
-                </Marker>
-              </React.Fragment>
-            );
-          })}
-
-        {/* 4. CUSTOM WAYPOINTS (Added by user only in addPoint mode) */}
-        {customWaypoints.map((wp, idx) => (
-          <Marker
-            key={wp.id}
-            position={[wp.lat, wp.lng]}
-            icon={createCustomWaypointIcon(wp, idx + 1)}
-            eventHandlers={{
-              click: (e) => {
-                L.DomEvent.stopPropagation(e as any);
-              },
-            }}
-          >
-            <Popup className="custom-leaflet-popup">
-              <div 
-                onClick={(e) => e.stopPropagation()} 
-                className="p-3 text-xs min-w-[210px] space-y-1.5 font-sans"
-              >
-                <div className="font-montserrat font-bold text-white text-sm pb-1 border-b border-cyan-400/30 flex items-center justify-between">
-                  <span>{wp.name}</span>
-                  <span className="text-[9.5px] text-cyan-300 font-mono">Punto Manual</span>
-                </div>
-                <div className="text-slate-200 flex justify-between">
-                  <span>Latitud / Longitud:</span>
-                  <strong className="text-white font-mono">{wp.lat.toFixed(4)}°N, {Math.abs(wp.lng).toFixed(4)}°W</strong>
-                </div>
-                <div className="text-slate-200 flex justify-between">
-                  <span>Masa asignada:</span>
-                  <strong className="text-cyan-300 font-mono">~{wp.massTons || 0} t</strong>
-                </div>
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    e.preventDefault();
-                    onRemoveCustomWaypoint(wp.id);
-                  }}
-                  className="w-full mt-2 py-1.5 px-3 rounded-xl bg-red-600/90 hover:bg-red-500 text-white font-montserrat font-bold text-xs transition-colors cursor-pointer flex items-center justify-center space-x-1.5 shadow-md"
-                >
-                  <Trash size={14} weight="bold" />
-                  <span>Eliminar punto</span>
-                </button>
-              </div>
-            </Popup>
-          </Marker>
-        ))}
+        {/* MASA DE LA ALERTA SELECCIONADA */}
+        {layers.sargassumPrediction && highlightGeometry && (
+          <GeoJSON
+            key={`mass-${highlightId}`}
+            data={highlightGeometry}
+            interactive={false}
+            style={{ color: '#FFFFFF', weight: 3, fillColor: '#F59E0B', fillOpacity: 0.25, dashArray: '6 4' }}
+          />
+        )}
 
         {/* 5. RUTA 100% SUGERIDA Y EXCLUSIVA (Línea Continua Turquesa Brillante #14B8A6) */}
-        {layers.optimalRoutes && resolvedSuggestedCoords.length > 1 && (
+        {layers.optimalRoutes && routeCoordinates.length > 1 && (
           <>
             {/* Glow underlay */}
             <Polyline
-              positions={resolvedSuggestedCoords}
+              positions={routeCoordinates}
               pathOptions={{
                 color: '#14B8A6',
                 weight: 8,
@@ -684,7 +245,7 @@ export const MapBoard: React.FC<MapBoardProps> = ({
             />
             {/* Main high-contrast line */}
             <Polyline
-              positions={resolvedSuggestedCoords}
+              positions={routeCoordinates}
               pathOptions={{
                 color: '#14B8A6',
                 weight: 4,
@@ -791,12 +352,12 @@ export const MapBoard: React.FC<MapBoardProps> = ({
               handleFocusSargassum();
             }}
             className="w-9 h-9 rounded-xl bg-[#06292D]/90 backdrop-blur-md border border-teal-400/30 shadow-floating text-teal-300 hover:text-white flex items-center justify-center cursor-pointer transition-colors"
-            title="Centrar en filamento de sargazo"
+            title="Centrar en la alerta"
           >
             <Crosshair size={18} weight="bold" className="text-[#2DD4BF]" />
           </motion.button>
           <div className="absolute right-full top-1/2 -translate-y-1/2 mr-2.5 px-2.5 py-1 rounded-lg bg-[#06292D]/95 backdrop-blur-md border border-teal-400/30 text-teal-100 text-[10.5px] font-montserrat font-bold whitespace-nowrap opacity-0 pointer-events-none group-hover:opacity-100 transition-opacity shadow-lg">
-            Centrar en filamento de sargazo
+            Centrar en la alerta
           </div>
         </div>
 

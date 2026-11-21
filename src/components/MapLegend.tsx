@@ -3,21 +3,19 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   Anchor, 
   Boat, 
-  MapPin, 
   CaretDown, 
   CaretUp,
-  Square,
-  Warning
 } from '@phosphor-icons/react';
+import { SargassumManifest } from '../types';
 
 interface MapLegendProps {
   className?: string;
-  runType?: string;
+  manifest?: SargassumManifest | null;
 }
 
 export const MapLegend: React.FC<MapLegendProps> = ({ 
   className = '',
-  runType = 'synthetic_demo' 
+  manifest = null,
 }) => {
   const [isCollapsed, setIsCollapsed] = useState(false);
 
@@ -57,30 +55,26 @@ export const MapLegend: React.FC<MapLegendProps> = ({
               transition={{ duration: 0.2 }}
               className="space-y-2.5 pt-2 text-[11px]"
             >
-              {/* Probabilidad de Presencia Detectable (0–1) */}
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between">
+              {/* Densidad relativa de masa (escala log del manifest) */}
+              {manifest && (
+                <div className="space-y-1.5">
                   <span className="text-[9.5px] font-mono text-teal-200/90 font-bold uppercase tracking-wider block">
-                    Probabilidad de presencia detectable (0–1)
+                    Densidad relativa por celda (escala log)
                   </span>
+                  <div
+                    className="h-2 w-full rounded-full border border-black/30 shadow-inner"
+                    style={{
+                      background: `linear-gradient(to right, ${manifest.palette
+                        .map((p) => `${p.color} ${(p.stop * 100).toFixed(0)}%`)
+                        .join(', ')})`,
+                    }}
+                  />
+                  <div className="flex justify-between text-[9px] text-teal-200/90 font-mono font-medium px-0.5">
+                    <span>{manifest.vmin.toExponential(1)}</span>
+                    <span>{manifest.vmax.toExponential(1)}</span>
+                  </div>
                 </div>
-
-                {/* 5-step heatmap gradient */}
-                <div 
-                  className="h-2 w-full rounded-full border border-black/30 shadow-inner"
-                  style={{
-                    background: 'linear-gradient(to right, #ffffb2 0%, #fecc5c 25%, #fd8d3c 50%, #f03b20 75%, #bd0026 100%)'
-                  }}
-                />
-
-                <div className="flex justify-between text-[9px] text-teal-200/90 font-mono font-medium px-0.5">
-                  <span>0.05</span>
-                  <span>0.25</span>
-                  <span>0.50</span>
-                  <span>0.75</span>
-                  <span className="font-bold text-red-400">1.00</span>
-                </div>
-              </div>
+              )}
 
               {/* Trazado de Ruta Sugerida */}
               <div className="pt-1.5 border-t border-teal-400/15">
@@ -89,7 +83,7 @@ export const MapLegend: React.FC<MapLegendProps> = ({
                     <div className="w-5 h-1 rounded-full bg-[#14B8A6] shadow-[0_0_8px_#14B8A6]" />
                     <span className="text-[10.5px] font-medium text-white">Ruta Sugerida</span>
                   </div>
-                  <span className="text-[9.5px] text-[#2DD4BF] font-mono font-bold">Óptima continua</span>
+                  <span className="text-[9.5px] text-[#2DD4BF] font-mono font-bold">Pre-generada</span>
                 </div>
               </div>
 
@@ -109,30 +103,7 @@ export const MapLegend: React.FC<MapLegendProps> = ({
                   <span className="truncate">Embarcación</span>
                 </div>
 
-                <div className="flex items-center space-x-1.5 text-slate-200">
-                  <div className="w-5 h-5 rounded-md bg-[#bd0026]/40 border-2 border-[#14B8A6] flex items-center justify-center text-white shrink-0 shadow-[0_0_8px_rgba(20,184,166,0.5)]">
-                    <Square size={10} weight="fill" className="text-[#14B8A6]" />
-                  </div>
-                  <span className="truncate">Celda en Ruta</span>
-                </div>
-
-                <div className="flex items-center space-x-1.5 text-slate-200">
-                  <div className="w-5 h-5 rounded-md bg-cyan-500/20 border border-cyan-400/40 flex items-center justify-center text-cyan-300 shrink-0">
-                    <MapPin size={12} weight="duotone" />
-                  </div>
-                  <span className="truncate">Punto Manual</span>
-                </div>
               </div>
-
-              {/* Synthetic demo notice */}
-              {runType === 'synthetic_demo' && (
-                <div className="mt-2 pt-1.5 border-t border-teal-400/15 flex items-start space-x-1.5 text-[9.5px] text-teal-200/75 leading-tight">
-                  <Warning size={13} weight="duotone" className="text-amber-400 shrink-0 mt-0.5" />
-                  <span>
-                    Simulación de demostración — Probabilidad de presencia detectable (0–1).
-                  </span>
-                </div>
-              )}
             </motion.div>
           )}
         </AnimatePresence>

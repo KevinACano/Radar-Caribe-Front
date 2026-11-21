@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Bell } from '@phosphor-icons/react';
 import { Navbar } from './components/Navbar';
@@ -8,92 +8,51 @@ import { BottomTelemetryBar } from './components/BottomTelemetryBar';
 import { InfoModal } from './components/InfoModal';
 import { MapLegend } from './components/MapLegend';
 import { PlanningModule } from './components/PlanningModule';
-import { 
-  BASE_PORTS as LOCAL_BASE_PORTS, 
-  CURRENT_MARITIME_WEATHER as LOCAL_WEATHER, 
-  DEFAULT_PORT_ID, 
-  DEFAULT_SELECTED_DETECTIONS, 
-  SARGASSUM_DETECTIONS as LOCAL_DETECTIONS 
-} from './data/sargassumData';
-import { SAMPLE_GEOJSON } from './data/sampleGeoJson';
-import { clusterSargassumFeatures } from './utils/sargassumClustering';
-import { 
-  calculateBearing, 
-  computeRouteOptimization, 
-  buildMetricsFromBackendResponse,
-  interpolatePosition 
-} from './utils/routeOptimizer';
-import { 
-  BasePort, 
-  BackendRouteResponse, 
-  CustomWaypoint, 
-  DashboardLayers, 
-  MaritimeWeather, 
-  MissionPlan, 
-  OptimizationMetrics, 
-  RouteStop, 
-  SargassumDetection,
-  SargassumGeoJsonCollection,
-  SargassumCluster,
-  AppNotification
+import { CURRENT_MARITIME_WEATHER as LOCAL_WEATHER } from './data/sargassumData';
+import { calculateBearing, interpolatePosition } from './utils/geo';
+import { fmtUtc } from './utils/density';
+import {
+  AlertDetail,
+  AlertsResponse,
+  AppNotification,
+  BasePort,
+  DashboardLayers,
+  FrameCollection,
+  MaritimeWeather,
+  MissionPlan,
+  SargassumManifest,
 } from './types';
-import { 
-  checkBackendHealth, 
-  fetchBackendDetections, 
-  fetchBackendPorts, 
-  fetchBackendWeather, 
-  requestBackendMultiRoute, 
-  requestBackendRoute,
-  RoutePointPayload
+import {
+  checkBackendHealth,
+  fetchAlertDetail,
+  fetchAlerts,
+  fetchBackendPorts,
+  fetchBackendWeather,
+  fetchFrame,
+  fetchManifest,
 } from './services/api';
 
-const STORAGE_KEY_PLANS = 'radar_caribe_saved_mission_plans';
-
-// Haversine formula helper
-const computeDistanceKm = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
-  const toRad = (a: number) => (a * Math.PI) / 180;
-  const dLat = toRad(lat2 - lat1);
-  const dLon = toRad(lon2 - lon1);
-  const a =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLon / 2) ** 2;
-  return 6371.0088 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-};
+const STORAGE_KEY_PLANS = 'radar_caribe_saved_mission_plans_v2';
 
 export const App: React.FC = () => {
-  // Real Data states
-  const [ports, setPorts] = useState<BasePort[]>(LOCAL_BASE_PORTS);
-  const [detections, setDetections] = useState<SargassumDetection[]>(LOCAL_DETECTIONS);
+  // Backend data
+  const [ports, setPorts] = useState<BasePort[]>([]);
   const [weather, setWeather] = useState<MaritimeWeather>(LOCAL_WEATHER);
-
-  // GeoJSON Sargassum Probability Dataset
-  const [geoJsonData] = useState<SargassumGeoJsonCollection | null>(
-    SAMPLE_GEOJSON as unknown as SargassumGeoJsonCollection
-  );
-
-  // Clusters espaciales consolidados (1 SOLO PUNTO POR MANCHA CONTIGUA)
-  const sargassumClusters: SargassumCluster[] = useMemo(() => {
-    if (!geoJsonData?.features) return [];
-    return clusterSargassumFeatures(geoJsonData.features);
-  }, [geoJsonData]);
-
-  // Inicio limpio: 0 puntos ni manchas seleccionadas al cargar
-  const [selectedClusterIds, setSelectedClusterIds] = useState<string[]>([]);
-
-  // Ports and Detections Selection (0 puntos precargados)
-  const [selectedPortId, setSelectedPortId] = useState<string>(DEFAULT_PORT_ID);
-  const [selectedDetectionIds, setSelectedDetectionIds] = useState<string[]>([]);
-
-  // Custom Waypoints & Point Dropping Mode
-  const [customWaypoints, setCustomWaypoints] = useState<CustomWaypoint[]>([]);
-  const [isAddPointActive, setIsAddPointActive] = useState<boolean>(false);
-
-  // 100% Ruta Sugerida Optimizada
-  const [returnToBase, setReturnToBase] = useState<boolean>(true);
-  const [backendRoute, setBackendRoute] = useState<BackendRouteResponse | null>(null);
   const [backendConnected, setBackendConnected] = useState<boolean>(true);
-  const [isCalculatingBackend, setIsCalculatingBackend] = useState<boolean>(false);
-  const [backendError, setBackendError] = useState<string | null>(null);
+  const [alertsData, setAlertsData] = useState<AlertsResponse | null>(null);
+  const [manifest, setManifest] = useState<SargassumManifest | null>(null);
+  const [frame, setFrame] = useState<FrameCollection | null>(null);
+  const [details, setDetails] = useState<Record<string, AlertDetail>>({});
+  const detailRequests = useRef<Set<string>>(new Set());
+  const frameCache = useRef<Map<number, FrameCollection>>(new Map());
+
+  // Selection
+  const [selectedAlertId, setSelectedAlertId] = useState<string | null>(null);
+  const [selectedPortId, setSelectedPortId] = useState<string>('');
+  const [minutes, setMinutes] = useState<number>(0);
+  const [focusBounds, setFocusBounds] = useState<[[number, number], [number, number]] | null>(null);
+  const [readIds, setReadIds] = useState<string[]>([]);
+  const [activeToast, setActiveToast] = useState<AppNotification | null>(null);
 
   // Layer Visibility
   const [layers, setLayers] = useState<DashboardLayers>({
@@ -107,29 +66,11 @@ export const App: React.FC = () => {
     coordinates: false,
   });
 
-  // Time window: Ahora, +6 h, +12 h
-  const [timeWindow, setTimeWindow] = useState<'Ahora' | '+6 h' | '+12 h'>('Ahora');
-
-  // UI Panels state (Panel derecho eliminado para total protagonismo del mapa)
-  const [isLeftOpen, setIsLeftOpen] = useState<boolean>(false);
+  // UI
+  const [isLeftOpen, setIsLeftOpen] = useState<boolean>(true);
   const [isInfoModalOpen, setIsInfoModalOpen] = useState<boolean>(false);
   const [activeTab, setActiveTab] = useState<'operativo' | 'planificacion'>('operativo');
 
-  // Sistema de Alertas y Notificaciones (Campana Bell en Header)
-  const [notifications, setNotifications] = useState<AppNotification[]>([
-    {
-      id: 'notif-base-1',
-      title: 'Vigilancia Satelital Activa',
-      message: 'Red de sensores satelitales Copernicus y SIMAR-CONABIO sincronizada.',
-      timestamp: 'Hace 3 min',
-      read: true,
-      type: 'sargassum_alert',
-    },
-  ]);
-  const [activeToast, setActiveToast] = useState<AppNotification | null>(null);
-  const [focusLocation, setFocusLocation] = useState<[number, number] | null>(null);
-
-  // Planning & Saved Mission Plans
   const [savedPlans, setSavedPlans] = useState<MissionPlan[]>(() => {
     try {
       const stored = localStorage.getItem(STORAGE_KEY_PLANS);
@@ -139,32 +80,59 @@ export const App: React.FC = () => {
     }
   });
 
-  // Simulation State (Bucle automático continuo a 2x)
+  // Simulation
   const [isSimulating, setIsSimulating] = useState<boolean>(false);
   const [currentLegIndex, setCurrentLegIndex] = useState<number>(0);
   const [legProgressFraction, setLegProgressFraction] = useState<number>(0);
   const [vesselPosition, setVesselPosition] = useState<[number, number] | null>(null);
   const [vesselBearing, setVesselBearing] = useState<number>(0);
 
-  // Sync data with backend on load
+  const alerts = alertsData?.alerts ?? [];
+  const runId = alertsData?.run_id ?? manifest?.run_id ?? null;
+
+  // Detail fetch (in-memory cache; one request per alert)
+  const ensureDetail = useCallback((id: string) => {
+    if (detailRequests.current.has(id)) return;
+    detailRequests.current.add(id);
+    fetchAlertDetail(id)
+      .then((d) => setDetails((prev) => ({ ...prev, [id]: d })))
+      .catch(() => detailRequests.current.delete(id));
+  }, []);
+
+  const handleSelectAlert = useCallback(
+    (id: string) => {
+      const alert = alerts.find((a) => a.id === id);
+      if (!alert) return;
+      setSelectedAlertId(id);
+      setSelectedPortId(alert.recommended_port_id);
+      setMinutes(alert.frame_minutes);
+      const [w, s, e, n] = alert.mass.bbox;
+      setFocusBounds([[s, w], [n, e]]);
+      setReadIds((prev) => (prev.includes(id) ? prev : [...prev, id]));
+      setActiveToast(null);
+      ensureDetail(id);
+    },
+    [alerts, ensureDetail]
+  );
+
   const syncWithBackend = async () => {
-    try {
-      const health = await checkBackendHealth();
-      if (health.status === 'ok') {
-        setBackendConnected(true);
-        const [fetchedPorts, fetchedDetections, fetchedWeather] = await Promise.all([
-          fetchBackendPorts().catch(() => LOCAL_BASE_PORTS),
-          fetchBackendDetections().catch(() => LOCAL_DETECTIONS),
-          fetchBackendWeather().catch(() => LOCAL_WEATHER),
-        ]);
-        if (fetchedPorts.length > 0) setPorts(fetchedPorts);
-        if (fetchedDetections.length > 0) setDetections(fetchedDetections);
-        setWeather(fetchedWeather);
-      } else {
-        setBackendConnected(false);
-      }
-    } catch {
+    const health = await checkBackendHealth();
+    if (health.status !== 'ok') {
       setBackendConnected(false);
+      return;
+    }
+    setBackendConnected(true);
+    const [p, a, w] = await Promise.all([
+      fetchBackendPorts().catch(() => [] as BasePort[]),
+      fetchAlerts().catch(() => null),
+      fetchBackendWeather().catch(() => LOCAL_WEATHER),
+    ]);
+    setPorts(p);
+    setWeather(w);
+    setAlertsData(a);
+    if (a) {
+      const m = await fetchManifest(a.run_id).catch(() => null);
+      setManifest(m);
     }
   };
 
@@ -172,335 +140,102 @@ export const App: React.FC = () => {
     syncWithBackend();
   }, []);
 
-  // Simulación automática de nuevo avistamiento detectado unos segundos después de abrir la app
+  // Default view: first alert (frame, mass, route), toast announcing the alerts
   useEffect(() => {
-    const timer = setTimeout(() => {
-      const newAlert: AppNotification = {
-        id: `notif-live-${Date.now()}`,
-        title: 'Nueva Detección de Sargazo',
-        message: 'Nueva detección de sargazo registrada frente a Puerto Morelos (~48 t, prob. 94%).',
-        timestamp: 'Ahora mismo',
-        read: false,
-        type: 'sargassum_alert',
-        locationName: 'Frente a Puerto Morelos',
-        lat: 20.854,
-        lng: -86.821,
-        massTons: 48,
-        probPercent: 94,
-      };
-      setNotifications((prev) => [newAlert, ...prev]);
-      setActiveToast(newAlert);
-    }, 4500);
+    if (alerts.length === 0 || selectedAlertId) return;
+    handleSelectAlert(alerts[0].id);
+    setReadIds([]);
+    setActiveToast(toNotification(alerts[0], false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [alertsData]);
 
-    return () => clearTimeout(timer);
-  }, []);
+  // Frame for the time control
+  useEffect(() => {
+    if (!runId) return;
+    const cached = frameCache.current.get(minutes);
+    if (cached) {
+      setFrame(cached);
+      return;
+    }
+    let cancelled = false;
+    fetchFrame(runId, minutes)
+      .then((f) => {
+        frameCache.current.set(minutes, f);
+        if (!cancelled) setFrame(f);
+      })
+      .catch(() => {
+        if (!cancelled) setFrame(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [runId, minutes]);
 
-  // Cierre automático del toast tras 8 segundos
   useEffect(() => {
     if (!activeToast) return;
-    const timer = setTimeout(() => {
-      setActiveToast(null);
-    }, 8000);
+    const timer = setTimeout(() => setActiveToast(null), 8000);
     return () => clearTimeout(timer);
   }, [activeToast]);
 
-  const handleNotificationClick = (notif: AppNotification) => {
-    if (notif.lat && notif.lng) {
-      setFocusLocation([notif.lat, notif.lng]);
+  const toNotification = (a: AlertsResponse['alerts'][number], read: boolean): AppNotification => ({
+    id: a.id,
+    title: a.title,
+    message: `Predicción ${fmtUtc(a.prediction_utc)} · masa de ${a.mass.area_km2.toFixed(1)} km²`,
+    timestamp: fmtUtc(a.prediction_utc),
+    read,
+  });
+
+  const notifications = useMemo(
+    () => alerts.map((a) => toNotification(a, readIds.includes(a.id))),
+    [alerts, readIds]
+  );
+
+  const handleNotificationClick = (notif: AppNotification) => handleSelectAlert(notif.id);
+  const handleMarkAllNotificationsRead = () => setReadIds(alerts.map((a) => a.id));
+
+  const persistPlans = (updated: MissionPlan[]) => {
+    try {
+      localStorage.setItem(STORAGE_KEY_PLANS, JSON.stringify(updated));
+    } catch (e) {
+      console.error(e);
     }
-    setNotifications((prev) =>
-      prev.map((n) => (n.id === notif.id ? { ...n, read: true } : n))
-    );
-    setActiveToast(null);
+    return updated;
   };
-
-  const handleMarkAllNotificationsRead = () => {
-    setNotifications((prev) => prev.map((n) => ({ ...n, read: true })));
-  };
-
-  // Save plans to localStorage
-  const handleSavePlan = (newPlan: MissionPlan) => {
-    setSavedPlans((prev) => {
-      const updated = [newPlan, ...prev];
-      try {
-        localStorage.setItem(STORAGE_KEY_PLANS, JSON.stringify(updated));
-      } catch (e) {
-        console.error(e);
-      }
-      return updated;
-    });
-  };
-
-  const handleDeletePlan = (planId: string) => {
-    setSavedPlans((prev) => {
-      const updated = prev.filter((p) => p.id !== planId);
-      try {
-        localStorage.setItem(STORAGE_KEY_PLANS, JSON.stringify(updated));
-      } catch (e) {
-        console.error(e);
-      }
-      return updated;
-    });
-  };
+  const handleSavePlan = (newPlan: MissionPlan) => setSavedPlans((prev) => persistPlans([newPlan, ...prev]));
+  const handleDeletePlan = (planId: string) =>
+    setSavedPlans((prev) => persistPlans(prev.filter((p) => p.id !== planId)));
 
   const handleLoadPlanToMap = (plan: MissionPlan) => {
+    const first = plan.assignedAlertIds.find((id) => alerts.some((a) => a.id === id));
+    if (first) handleSelectAlert(first);
     if (plan.portId) setSelectedPortId(plan.portId);
-    if (plan.assignedPointIds && plan.assignedPointIds.length > 0) {
-      setSelectedDetectionIds(
-        plan.assignedPointIds.filter((id) => !id.startsWith('custom-') && !id.startsWith('cluster-'))
-      );
-    }
-    setBackendRoute(null);
     setActiveTab('operativo');
   };
 
-  // Selected entities
-  const selectedPort = useMemo(() => {
-    return ports.find((p) => p.id === selectedPortId) || ports[0];
-  }, [ports, selectedPortId]);
+  const selectedAlert = alerts.find((a) => a.id === selectedAlertId) ?? null;
+  const selectedDetail = selectedAlertId ? details[selectedAlertId] ?? null : null;
+  const selectedRoute = selectedDetail?.routes[selectedPortId] ?? null;
 
-  const selectedDetections = useMemo(() => {
-    const map = new Map(detections.map((d) => [d.id, d]));
-    return selectedDetectionIds
-      .map((id) => map.get(id))
-      .filter((d): d is SargassumDetection => Boolean(d));
-  }, [detections, selectedDetectionIds]);
-
-  // Combined targets (Detections + Custom Waypoints + 1 Consolidated Point per Sargassum Cluster)
-  const allSelectedTargets = useMemo(() => {
-    const targets: SargassumDetection[] = [...selectedDetections];
-
-    // Custom waypoints (only those explicitly placed by user)
-    customWaypoints.forEach((wp) => {
-      targets.push({
-        id: wp.id,
-        codeName: wp.name,
-        zoneName: 'Punto Manual en Mar',
-        lat: wp.lat,
-        lng: wp.lng,
-        detectionDate: 'Punto de Paso',
-        source: 'Avistamiento Costero',
-        massTons: wp.massTons || 0,
-        priority: 'Media',
-        confidencePercent: 95,
-        areaKm2: 1.0,
-        estimatedDepthM: 1.0,
-        distanceToCoastKm: 5.0,
-      });
-    });
-
-    // 1 SOLO PUNTO CONSOLIDADO POR MANCHA CONTIGUA DE SARGAZO
-    sargassumClusters.forEach((cluster) => {
-      if (selectedClusterIds.includes(cluster.id)) {
-        targets.push({
-          id: cluster.id,
-          codeName: cluster.name,
-          zoneName: `Filamento Predictivo (P. máx: ${(cluster.maxProb * 100).toFixed(0)}%)`,
-          lat: cluster.centroidLat,
-          lng: cluster.centroidLng,
-          detectionDate: cluster.datetime,
-          source: 'SIMAR-CONABIO',
-          massTons: cluster.estimatedMassTons,
-          priority: 'Alta',
-          confidencePercent: Math.round(cluster.maxProb * 100),
-          areaKm2: cluster.cellCount * 25.0,
-          estimatedDepthM: 1.5,
-          distanceToCoastKm: Number(
-            computeDistanceKm(cluster.centroidLat, cluster.centroidLng, selectedPort.lat, selectedPort.lng).toFixed(1)
-          ),
-        });
-      }
-    });
-
-    return targets;
-  }, [selectedDetections, customWaypoints, sargassumClusters, selectedClusterIds, selectedPort]);
-
-  // Base TSP Metrics (Instant fallback / baseline)
-  const baseLocalMetrics = useMemo(() => {
-    if (allSelectedTargets.length === 0) return null;
-    return computeRouteOptimization(selectedPort, allSelectedTargets);
-  }, [selectedPort, allSelectedTargets]);
-
-  // Combined Suggested Route Metrics
-  const metrics: OptimizationMetrics | null = useMemo(() => {
-    if (!baseLocalMetrics) return null;
-
-    if (backendRoute) {
-      return buildMetricsFromBackendResponse(
-        backendRoute,
-        baseLocalMetrics.optimizedSequence,
-        baseLocalMetrics.totalMassTons
-      );
-    }
-
-    return baseLocalMetrics;
-  }, [baseLocalMetrics, backendRoute]);
-
-  // 100% RUTA SUGERIDA COORDENADAS
-  const suggestedRouteCoordinates: [number, number][] = useMemo(() => {
-    if (backendRoute?.route?.coordinates && backendRoute.route.coordinates.length > 0) {
-      return backendRoute.route.coordinates.map(([lon, lat]) => [lat, lon] as [number, number]);
-    }
-    if (metrics?.optimizedSequence && metrics.optimizedSequence.length > 0) {
-      const coords: [number, number][] = metrics.optimizedSequence.map((s) => [s.lat, s.lng]);
-      if (returnToBase && coords.length > 1) {
-        coords.push([selectedPort.lat, selectedPort.lng]);
-      }
-      return coords;
-    }
-    return [];
-  }, [backendRoute, metrics, returnToBase, selectedPort]);
-
-  const suggestedDistanceKm = useMemo(() => {
-    return metrics?.optimizedDistanceKm || 0;
-  }, [metrics]);
-
-  const suggestedEtaFormatted = useMemo(() => {
-    return metrics?.etaTotalFormatted || '0 h 0 m';
-  }, [metrics]);
-
-  const savingsPercent = useMemo(() => {
-    return metrics?.percentageReduction || 0;
-  }, [metrics]);
-
-  // Coordenadas activas para simulación y mapa (100% Sugerida)
-  const activeRouteCoordinates: [number, number][] = suggestedRouteCoordinates;
-
-  // Request backend route calculation
-  const handleCalculateBackendRoute = async () => {
-    if (allSelectedTargets.length === 0) return;
-    setIsCalculatingBackend(true);
-    setBackendError(null);
-
-    try {
-      const portPayload: RoutePointPayload = {
-        lat: selectedPort.lat,
-        lon: selectedPort.lng,
-        name: selectedPort.name,
-        id: selectedPort.id,
-      };
-      const targetPayloads: RoutePointPayload[] = allSelectedTargets.map((d) => ({
-        lat: d.lat,
-        lon: d.lng,
-        name: d.codeName || d.zoneName,
-        id: d.id,
-      }));
-
-      if (targetPayloads.length === 1 && !returnToBase) {
-        const response = await requestBackendRoute(portPayload, targetPayloads[0]);
-        setBackendRoute(response);
-      } else {
-        const pointsPayload: RoutePointPayload[] = [portPayload, ...targetPayloads];
-        const response = await requestBackendMultiRoute(pointsPayload, returnToBase);
-        setBackendRoute(response);
-      }
-    } catch (err: any) {
-      console.warn('Backend calculation fallback:', err.message);
-      setBackendError('Calculando sobre cartas de navegación satelital.');
-    } finally {
-      setIsCalculatingBackend(false);
-    }
-  };
-
-  // Add Custom Waypoint on Map Click ONLY if isAddPointActive is true
-  const handleAddCustomWaypoint = (lat: number, lng: number) => {
-    if (!isAddPointActive) return;
-    const nextIndex = customWaypoints.length + 1;
-    const newWp: CustomWaypoint = {
-      id: `custom-${Date.now()}`,
-      name: `Punto Manual #${nextIndex}`,
-      lat,
-      lng,
-      massTons: 15,
-      createdAt: new Date().toISOString(),
-    };
-    setCustomWaypoints((prev) => [...prev, newWp]);
-    setBackendRoute(null);
-    setIsAddPointActive(false); // Automatically deactivate after placing the point
-  };
-
-  // Remove Custom Waypoint
-  const handleRemoveCustomWaypoint = (id: string) => {
-    setCustomWaypoints((prev) => prev.filter((w) => w.id !== id));
-    setBackendRoute(null);
-  };
-
-  const handleMoveWaypointUp = (index: number) => {
-    if (index === 0) return;
-    setCustomWaypoints((prev) => {
-      const next = [...prev];
-      const temp = next[index];
-      next[index] = next[index - 1];
-      next[index - 1] = temp;
-      return next;
-    });
-    setBackendRoute(null);
-  };
-
-  const handleMoveWaypointDown = (index: number) => {
-    if (index >= customWaypoints.length - 1) return;
-    setCustomWaypoints((prev) => {
-      const next = [...prev];
-      const temp = next[index];
-      next[index] = next[index + 1];
-      next[index + 1] = temp;
-      return next;
-    });
-    setBackendRoute(null);
-  };
-
-  // Selection handlers for coastal detections
-  const handleToggleDetection = (id: string) => {
-    setSelectedDetectionIds((prev) =>
-      prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]
-    );
-    setBackendRoute(null);
-  };
-
-  // Cluster Selection Handler (Toggle the consolidated cluster point)
-  const handleToggleCluster = (clusterId: string) => {
-    setSelectedClusterIds((prev) =>
-      prev.includes(clusterId) ? prev.filter((id) => id !== clusterId) : [...prev, clusterId]
-    );
-    setBackendRoute(null);
-  };
-
-  const handleSelectAll = () => {
-    setSelectedDetectionIds(detections.map((d) => d.id));
-    setSelectedClusterIds(sargassumClusters.map((c) => c.id));
-    setBackendRoute(null);
-  };
-
-  const handleClearAll = () => {
-    setSelectedDetectionIds([]);
-    setCustomWaypoints([]);
-    setSelectedClusterIds([]);
-    setBackendRoute(null);
-  };
-
-  const handleResetDefaults = () => {
-    setSelectedPortId(DEFAULT_PORT_ID);
-    setSelectedDetectionIds([]);
-    setCustomWaypoints([]);
-    setSelectedClusterIds([]);
-    setBackendRoute(null);
-  };
+  const routeCoordinates: [number, number][] = useMemo(
+    () =>
+      selectedRoute?.status === 'ok' && selectedRoute.route
+        ? selectedRoute.route.coordinates.map(([lon, lat]) => [lat, lon] as [number, number])
+        : [],
+    [selectedRoute]
+  );
 
   const handleCycleBasemapMode = () => {
-    setLayers((prev) => {
-      const nextMode: 'ocean' | 'satellite' | 'osm' =
-        prev.basemapMode === 'ocean'
-          ? 'satellite'
-          : prev.basemapMode === 'satellite'
-          ? 'osm'
-          : 'ocean';
-      return { ...prev, basemapMode: nextMode };
-    });
+    setLayers((prev) => ({
+      ...prev,
+      basemapMode: prev.basemapMode === 'ocean' ? 'satellite' : prev.basemapMode === 'satellite' ? 'osm' : 'ocean',
+    }));
   };
 
   const handleToggleLayer = (layerKey: keyof DashboardLayers) => {
     setLayers((prev) => ({ ...prev, [layerKey]: !prev[layerKey] }));
   };
+
+  const activeRouteCoordinates = routeCoordinates;
 
   // Inicio / reinicio automático de simulación en bucle continuo al existir ruta óptima
   useEffect(() => {
@@ -593,18 +328,22 @@ export const App: React.FC = () => {
 
   return (
     <div className="relative h-screen w-screen overflow-hidden bg-[#07151D] font-sans text-slate-100">
-      {/* 1. HEADER FLOTANTE ESTILO VERDE ABISAL TRANSLÚCIDO CON CENTRO DE NOTIFICACIONES */}
       <Navbar
         weather={weather}
         activeTab={activeTab}
         onSelectTab={setActiveTab}
         backendConnected={backendConnected}
-        isBackendCalculating={isCalculatingBackend}
         onRefreshBackend={syncWithBackend}
         notifications={notifications}
         onNotificationClick={handleNotificationClick}
         onMarkAllNotificationsRead={handleMarkAllNotificationsRead}
       />
+
+      {!backendConnected && (
+        <div className="fixed top-24 left-1/2 -translate-x-1/2 z-40 px-4 py-1.5 rounded-full bg-red-950/85 border border-red-400/50 text-red-200 text-xs font-bold font-montserrat">
+          Backend sin conexión · sin alertas ni predicciones
+        </div>
+      )}
 
       {/* TOAST FLOTANTE DISCRETO DE NUEVAS ALERTAS DE SARGAZO */}
       <AnimatePresence>
@@ -649,91 +388,56 @@ export const App: React.FC = () => {
         )}
       </AnimatePresence>
 
-      {/* 2. FULLSCREEN SATELLITE MAP & FLOATING MODULES */}
       <main className="relative w-full h-full overflow-hidden">
         <MapBoard
           ports={ports}
           selectedPortId={selectedPortId}
           onSelectPort={setSelectedPortId}
-          detections={detections}
-          selectedDetectionIds={selectedDetectionIds}
-          onToggleDetection={handleToggleDetection}
-          customWaypoints={customWaypoints}
-          onAddCustomWaypoint={handleAddCustomWaypoint}
-          onRemoveCustomWaypoint={handleRemoveCustomWaypoint}
           layers={layers}
-          metrics={metrics}
-          suggestedRouteCoordinates={suggestedRouteCoordinates}
-          geoJsonData={geoJsonData}
-          sargassumClusters={sargassumClusters}
-          selectedClusterIds={selectedClusterIds}
-          onToggleCluster={handleToggleCluster}
-          isAddPointActive={isAddPointActive}
-          onCancelAddPointActive={() => setIsAddPointActive(false)}
+          routeCoordinates={routeCoordinates}
+          frame={frame}
+          manifest={manifest}
+          highlightGeometry={selectedAlert && selectedAlert.frame_minutes === minutes ? selectedAlert.mass.geometry : null}
+          highlightId={selectedAlertId}
+          focusBounds={focusBounds}
           isSimulating={isSimulating}
           vesselPosition={vesselPosition}
           vesselBearing={vesselBearing}
-          currentLegIndex={currentLegIndex}
           onCycleBasemapMode={handleCycleBasemapMode}
-          focusLocation={focusLocation}
         />
 
-        {/* 3. LEFT CONTROL PANEL (Separación vertical 28px–32px y 100% Ruta Sugerida) */}
         <LeftSidebar
           ports={ports}
           selectedPortId={selectedPortId}
           onSelectPort={setSelectedPortId}
-          detections={detections}
-          selectedDetectionIds={selectedDetectionIds}
-          onToggleDetection={handleToggleDetection}
-          customWaypoints={customWaypoints}
-          onRemoveCustomWaypoint={handleRemoveCustomWaypoint}
-          onSelectAll={handleSelectAll}
-          onClearAll={handleClearAll}
-          onResetDefaults={handleResetDefaults}
+          alerts={alerts}
+          selectedAlertId={selectedAlertId}
+          onSelectAlert={handleSelectAlert}
+          detail={selectedDetail}
           layers={layers}
           onToggleLayer={handleToggleLayer}
           isOpen={isLeftOpen}
           onToggleOpen={() => setIsLeftOpen(!isLeftOpen)}
-          timeWindow={timeWindow}
-          onChangeTimeWindow={setTimeWindow}
-          suggestedDistanceKm={suggestedDistanceKm}
-          suggestedEtaFormatted={suggestedEtaFormatted}
-          savingsPercent={savingsPercent}
-          returnToBase={returnToBase}
-          onToggleReturnToBase={() => setReturnToBase(!returnToBase)}
-          isCalculatingBackend={isCalculatingBackend}
-          onCalculateBackendRoute={handleCalculateBackendRoute}
-          backendError={backendError}
-          onMoveWaypointUp={handleMoveWaypointUp}
-          onMoveWaypointDown={handleMoveWaypointDown}
-          isAddPointActive={isAddPointActive}
-          onToggleAddPointActive={() => setIsAddPointActive(!isAddPointActive)}
-          sargassumClusters={sargassumClusters}
-          selectedClusterIds={selectedClusterIds}
-          onToggleCluster={handleToggleCluster}
+          manifest={manifest}
+          minutes={minutes}
+          onChangeMinutes={setMinutes}
         />
 
-        {/* 4. BOTTOM TELEMETRY DOCK (Corrientes, Oleaje, Viento en Verde Abisal) */}
         <BottomTelemetryBar weather={weather} />
+        <MapLegend manifest={manifest} />
 
-        {/* 7. FLOATING MAP LEGEND (Esquina inferior izquierda en Verde Abisal) */}
-        <MapLegend />
-
-        {/* 8. MODAL DE PLANIFICACIÓN TOTALMENTE FUNCIONAL */}
         {activeTab === 'planificacion' && (
           <PlanningModule
             isOpen={true}
             onClose={() => setActiveTab('operativo')}
             activeTab="planificacion"
             onSelectTab={(tab) => {
-              if (tab === 'operativo' || tab === 'planificacion') {
-                setActiveTab(tab);
-              }
+              if (tab === 'operativo' || tab === 'planificacion') setActiveTab(tab);
             }}
             ports={ports}
-            detections={detections}
-            customWaypoints={customWaypoints}
+            alerts={alerts}
+            details={details}
+            onNeedDetail={ensureDetail}
             weather={weather}
             savedPlans={savedPlans}
             onSavePlan={handleSavePlan}
@@ -742,7 +446,6 @@ export const App: React.FC = () => {
           />
         )}
 
-        {/* 9. MODAL INFORMATIVO */}
         <InfoModal isOpen={isInfoModalOpen} onClose={() => setIsInfoModalOpen(false)} />
       </main>
     </div>

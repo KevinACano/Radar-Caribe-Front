@@ -220,12 +220,10 @@ export const Navbar: React.FC<NavbarProps> = ({
                           <p className="text-[11px] text-slate-200 mt-1 leading-snug">
                             {notif.message}
                           </p>
-                          {notif.lat && notif.lng && (
-                            <div className="mt-1.5 flex items-center space-x-1 text-[10px] text-teal-300 font-montserrat font-bold">
-                              <MapPin size={12} weight="bold" />
-                              <span>Clic para enfocar en mapa</span>
-                            </div>
-                          )}
+                          <div className="mt-1.5 flex items-center space-x-1 text-[10px] text-teal-300 font-montserrat font-bold">
+                            <MapPin size={12} weight="bold" />
+                            <span>Clic para ver masa y ruta</span>
+                          </div>
                         </div>
                       ))}
                     </div>

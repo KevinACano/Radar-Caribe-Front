@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   CalendarCheck, 
@@ -16,7 +16,8 @@ import {
   Compass,
   GasPump
 } from '@phosphor-icons/react';
-import { BasePort, CustomWaypoint, MaritimeWeather, MissionPlan, SargassumDetection } from '../types';
+import { AlertDetail, AlertSummary, BasePort, MaritimeWeather, MissionPlan } from '../types';
+import { fmtUtc } from '../utils/density';
 
 interface PlanningModuleProps {
   isOpen: boolean;
@@ -24,8 +25,9 @@ interface PlanningModuleProps {
   activeTab: 'planificacion' | 'historial';
   onSelectTab: (tab: 'operativo' | 'planificacion' | 'historial') => void;
   ports: BasePort[];
-  detections: SargassumDetection[];
-  customWaypoints: CustomWaypoint[];
+  alerts: AlertSummary[];
+  details: Record<string, AlertDetail>;
+  onNeedDetail: (id: string) => void;
   weather: MaritimeWeather;
   savedPlans: MissionPlan[];
   onSavePlan: (newPlan: MissionPlan) => void;
@@ -47,8 +49,9 @@ export const PlanningModule: React.FC<PlanningModuleProps> = ({
   activeTab,
   onSelectTab,
   ports,
-  detections,
-  customWaypoints,
+  alerts,
+  details,
+  onNeedDetail,
   weather,
   savedPlans,
   onSavePlan,
@@ -61,28 +64,25 @@ export const PlanningModule: React.FC<PlanningModuleProps> = ({
   const [scheduledTime, setScheduledTime] = useState('07:30');
   const [selectedVessel, setSelectedVessel] = useState(AVAILABLE_VESSELS[0]);
   const [selectedPortId, setSelectedPortId] = useState(ports[0]?.id || 'port-juarez');
-  const [assignedTargetIds, setAssignedTargetIds] = useState<string[]>([
-    detections[0]?.id || 'SARG-QR-01',
-    detections[1]?.id || 'SARG-QR-02',
-  ]);
+  const [assignedTargetIds, setAssignedTargetIds] = useState<string[]>([]);
   const [savedSuccessMsg, setSavedSuccessMsg] = useState(false);
 
   const selectedPort = ports.find((p) => p.id === selectedPortId) || ports[0];
+  const assignedAlerts = alerts.filter((a) => assignedTargetIds.includes(a.id));
 
-  const assignedDetections = detections.filter((d) => assignedTargetIds.includes(d.id));
-  const assignedCustomPoints = customWaypoints.filter((wp) => assignedTargetIds.includes(wp.id));
-
-  // Compute Mission Estimates
-  const totalBiomassTons = assignedDetections.reduce((sum, d) => sum + d.massTons, 0) +
-    assignedCustomPoints.reduce((sum, wp) => sum + (wp.massTons || 0), 0);
-
-  const totalPointsCount = assignedDetections.length + assignedCustomPoints.length;
-  // Estimate distance roughly 15-20km per target
-  const estimatedDistKm = Math.round(Math.max(12, totalPointsCount * 18.5));
-  const estimatedDistNm = Number((estimatedDistKm / 1.852).toFixed(1));
-  const estimatedHours = Math.floor(estimatedDistKm / 14.8);
-  const estimatedMins = Math.round(((estimatedDistKm / 14.8) - estimatedHours) * 60);
-  const estimatedDuration = `${estimatedHours} h ${estimatedMins} m`;
+  // Estimates come from the pre-generated routes of the chosen port (fetched on assignment)
+  useEffect(() => {
+    assignedTargetIds.forEach(onNeedDetail);
+  }, [assignedTargetIds, onNeedDetail]);
+  const metas = assignedAlerts.map((a) => details[a.id]?.routes[selectedPortId]?.meta);
+  const known = metas.filter((m): m is NonNullable<typeof m> => Boolean(m));
+  const totalMassKm2 = assignedAlerts.reduce((sum, a) => sum + a.mass.area_km2, 0);
+  const estimatedDistKm = known.reduce((sum, m) => sum + m.distance_km, 0);
+  const estimatedMinutes = known.reduce((sum, m) => sum + m.time_minutes, 0);
+  const estimatedDistNm = estimatedDistKm / 1.852;
+  const estimatedDuration = known.length
+    ? `${Math.floor(estimatedMinutes / 60)} h ${Math.round(estimatedMinutes % 60)} m`
+    : '—';
 
   const handleToggleTarget = (id: string) => {
     setAssignedTargetIds((prev) => 
@@ -99,12 +99,12 @@ export const PlanningModule: React.FC<PlanningModuleProps> = ({
       vesselName: selectedVessel,
       portId: selectedPort.id,
       portName: selectedPort.name,
-      assignedPointIds: assignedTargetIds,
-      assignedPointsSummary: `${assignedDetections.map((d) => d.codeName).join(', ')}${assignedCustomPoints.length > 0 ? ` + ${assignedCustomPoints.length} manuales` : ''}`,
-      totalDistanceKm: estimatedDistKm,
-      totalDistanceNm: estimatedDistNm,
+      assignedAlertIds: assignedTargetIds,
+      assignedAlertsSummary: assignedAlerts.map((a) => fmtUtc(a.prediction_utc)).join(', '),
+      totalDistanceKm: Math.round(estimatedDistKm),
+      totalDistanceNm: Number(estimatedDistNm.toFixed(1)),
       totalDurationFormatted: estimatedDuration,
-      totalMassTons: totalBiomassTons,
+      totalMassKm2: Number(totalMassKm2.toFixed(1)),
       weatherStatus: weather.status,
       createdAt: new Date().toLocaleString(),
       status: 'Programada',
@@ -124,12 +124,12 @@ export const PlanningModule: React.FC<PlanningModuleProps> = ({
       vesselName: selectedVessel,
       portId: selectedPort.id,
       portName: selectedPort.name,
-      assignedPointIds: assignedTargetIds,
-      assignedPointsSummary: title,
-      totalDistanceKm: estimatedDistKm,
-      totalDistanceNm: estimatedDistNm,
+      assignedAlertIds: assignedTargetIds,
+      assignedAlertsSummary: title,
+      totalDistanceKm: Math.round(estimatedDistKm),
+      totalDistanceNm: Number(estimatedDistNm.toFixed(1)),
       totalDurationFormatted: estimatedDuration,
-      totalMassTons: totalBiomassTons,
+      totalMassKm2: Number(totalMassKm2.toFixed(1)),
       weatherStatus: weather.status,
       createdAt: new Date().toLocaleString(),
       status: 'Programada',
@@ -166,7 +166,7 @@ export const PlanningModule: React.FC<PlanningModuleProps> = ({
                 </h2>
                 <p className="text-xs text-teal-200/80">
                   {activeTab === 'planificacion' 
-                    ? 'Asigna embarcaciones, horarios y bancos de sargazo para la jornada' 
+                    ? 'Asigna embarcaciones, horarios y alertas de sargazo para la jornada' 
                     : 'Revisa y ejecuta planes operativos previos en el mapa'}
                 </p>
               </div>
@@ -295,20 +295,20 @@ export const PlanningModule: React.FC<PlanningModuleProps> = ({
                   <div className="space-y-2 pt-2">
                     <div className="flex items-center justify-between">
                       <label className="text-[11px] font-mono font-bold text-teal-300 uppercase tracking-wider">
-                        Bancos de Sargazo y Puntos Asignados ({assignedTargetIds.length})
+                        Alertas de Sargazo Asignadas ({assignedTargetIds.length})
                       </label>
                       <span className="text-[10px] text-teal-200/60 font-mono">
-                        Selecciona los objetivos a visitar
+                        Selecciona las alertas a atender
                       </span>
                     </div>
 
                     <div className="grid grid-cols-2 gap-2 max-h-48 overflow-y-auto pr-1">
-                      {detections.map((d) => {
-                        const isChecked = assignedTargetIds.includes(d.id);
+                      {alerts.map((al) => {
+                        const isChecked = assignedTargetIds.includes(al.id);
                         return (
                           <div
-                            key={d.id}
-                            onClick={() => handleToggleTarget(d.id)}
+                            key={al.id}
+                            onClick={() => handleToggleTarget(al.id)}
                             className={`p-2 rounded-xl border text-xs cursor-pointer flex items-center justify-between transition-colors ${
                               isChecked
                                 ? 'bg-teal-500/25 border-teal-400/60 text-white shadow-[0_0_10px_rgba(45,212,191,0.2)]'
@@ -316,34 +316,14 @@ export const PlanningModule: React.FC<PlanningModuleProps> = ({
                             }`}
                           >
                             <div className="truncate">
-                              <span className="font-montserrat font-bold text-[11px] block truncate">{d.codeName}</span>
-                              <span className="text-[9.5px] text-teal-200/70">{d.zoneName}</span>
+                              <span className="font-montserrat font-bold text-[11px] block truncate">{fmtUtc(al.prediction_utc)}</span>
+                              <span className="text-[9.5px] text-teal-200/70">{al.mass.cell_count} celdas</span>
                             </div>
-                            <span className="font-mono text-teal-300 font-bold text-[11px]">~{d.massTons}t</span>
+                            <span className="font-mono text-teal-300 font-bold text-[11px]">{al.mass.area_km2.toFixed(1)} km²</span>
                           </div>
                         );
                       })}
-
-                      {customWaypoints.map((wp) => {
-                        const isChecked = assignedTargetIds.includes(wp.id);
-                        return (
-                          <div
-                            key={wp.id}
-                            onClick={() => handleToggleTarget(wp.id)}
-                            className={`p-2 rounded-xl border text-xs cursor-pointer flex items-center justify-between transition-colors ${
-                              isChecked
-                                ? 'bg-cyan-500/25 border-cyan-400/60 text-white'
-                                : 'bg-black/25 border-white/5 text-slate-300 hover:bg-white/5'
-                            }`}
-                          >
-                            <div className="truncate">
-                              <span className="font-montserrat font-bold text-[11px] block truncate">{wp.name}</span>
-                              <span className="text-[9.5px] text-cyan-300/80">Punto manual</span>
-                            </div>
-                            <span className="font-mono text-cyan-300 font-bold text-[11px]">~{wp.massTons || 0}t</span>
-                          </div>
-                        );
-                      })}
+                      {alerts.length === 0 && <span className="text-[11px] text-slate-400">Sin alertas disponibles.</span>}
                     </div>
                   </div>
                 </div>
@@ -364,22 +344,22 @@ export const PlanningModule: React.FC<PlanningModuleProps> = ({
                     {/* Stats Grid */}
                     <div className="grid grid-cols-2 gap-2 text-center text-xs">
                       <div className="bg-black/40 p-2 rounded-xl border border-teal-400/15">
-                        <span className="text-[10px] text-teal-200/70 block font-semibold">Biomasa Estimada</span>
+                        <span className="text-[10px] text-teal-200/70 block font-semibold">Masa Prevista</span>
                         <span className="font-montserrat font-extrabold text-base text-white block mt-0.5">
-                          ~{totalBiomassTons.toLocaleString()} t
+                          {totalMassKm2.toFixed(1)} km²
                         </span>
                         <span className="text-[9px] text-teal-300 font-mono">
-                          {totalPointsCount} bancos asignados
+                          {assignedAlerts.length} alertas asignadas
                         </span>
                       </div>
 
                       <div className="bg-black/40 p-2 rounded-xl border border-teal-400/15">
                         <span className="text-[10px] text-teal-200/70 block font-semibold">Distancia Recorrido</span>
                         <span className="font-montserrat font-extrabold text-base text-[#2DD4BF] block mt-0.5">
-                          {estimatedDistKm} km
+                          {known.length ? estimatedDistKm.toFixed(1) : '—'} km
                         </span>
                         <span className="text-[9px] text-teal-300 font-mono">
-                          ~{estimatedDistNm} MN
+                          ~{known.length ? estimatedDistNm.toFixed(1) : '—'} MN
                         </span>
                       </div>
 
@@ -389,17 +369,7 @@ export const PlanningModule: React.FC<PlanningModuleProps> = ({
                           {estimatedDuration}
                         </span>
                         <span className="text-[9px] text-teal-200/60 font-mono">
-                          a 8.0 nudos vel.
-                        </span>
-                      </div>
-
-                      <div className="bg-black/40 p-2 rounded-xl border border-teal-400/15">
-                        <span className="text-[10px] text-teal-200/70 block font-semibold">Diésel Aprox.</span>
-                        <span className="font-montserrat font-extrabold text-sm text-white block mt-0.5">
-                          {Math.round(estimatedDistKm * 1.89)} L
-                        </span>
-                        <span className="text-[9px] text-emerald-300 font-mono">
-                          Consumo estándar
+                          rutas pre-generadas
                         </span>
                       </div>
                     </div>
@@ -495,7 +465,7 @@ export const PlanningModule: React.FC<PlanningModuleProps> = ({
                             </div>
                             <div className="flex justify-between">
                               <span className="text-teal-200/70">Estimación:</span>
-                              <strong className="text-[#2DD4BF] font-mono">{plan.totalDistanceKm} km · ~{plan.totalMassTons} t ({plan.totalDurationFormatted})</strong>
+                              <strong className="text-[#2DD4BF] font-mono">{plan.totalDistanceKm} km · {plan.totalMassKm2} km² ({plan.totalDurationFormatted})</strong>
                             </div>
                           </div>
                         </div>
